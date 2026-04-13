@@ -1,0 +1,230 @@
+{
+  "rules": [
+    {
+      "id": "1",
+      "target": "Cell",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 1.2,
+              "field_name": "Oxygen"
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Oxygen",
+            "parameters": {
+              "y_max": 1.5,
+              "y_min": 0.5,
+              "K": 0.5,
+              "n": 2.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "2",
+      "target": "CellA",
+      "behaviour": "differentiate",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "TimeWindow",
+            "params": {
+              "start": 500,
+              "end": 600
+            }
+          },
+          "apply": {
+            "mode": "division",
+            "new_type": "CellA_1",
+            "parent_type": "CellA_1",
+            "child_type": "CellA_2",
+            "volume_ratio": 0.5,
+            "placement": {
+              "type": "random"
+            }
+          }
+        }
+      ],
+      "once": true,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "3",
+      "target": "CellA_1",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Contact",
+            "params": {
+              "operator": ">",
+              "threshold": 0.5,
+              "target_type": "CellA_1"
+            }
+          },
+          "apply": {
+            "model": "expression",
+            "regulator": "Oxygen",
+            "parameters": {
+              "expression": "2* Oxygen"
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "4",
+      "target": "CellA_2",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Duration",
+            "params": {
+              "threshold_mcs": 500,
+              "sub_condition": {
+                "condition_type": "Custom",
+                "script_path": "/Users/xiaoyue/src/bioinfo/project/Rules_project/Simulation/test_custom1.py",
+                "params": {
+                  "threshold": 0.5
+                }
+              }
+            }
+          },
+          "apply": {
+            "model": "linear",
+            "regulator": "Oxygen",
+            "parameters": {
+              "alpha": 1.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "5",
+      "target": "CellB",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "TRUE",
+            "params": {}
+          },
+          "apply": {
+            "model": "expression",
+            "regulator": "Oxygen",
+            "parameters": {
+              "expression": "0"
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "6",
+      "target": "CellA_1",
+      "behaviour": "create",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Probability",
+            "params": {
+              "p": 0.3
+            }
+          },
+          "apply": {
+            "cell_type": "CellC",
+            "count": 10,
+            "distribution": {
+              "type": "random"
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "7",
+      "target": null,
+      "behaviour": "create",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "TimeWindow",
+            "params": {
+              "start": 1000,
+              "end": 1100
+            }
+          },
+          "apply": {
+            "cell_type": "CellD",
+            "count": 10,
+            "distribution": {
+              "type": "stripe",
+              "direction": "vertical",
+              "x": 90,
+              "y_start": 30,
+              "y_end": 50
+            }
+          }
+        }
+      ],
+      "once": true,
+      "debug": false,
+      "triggered": false
+    }
+  ],
+  "celltype_params": {
+    "Cell": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0,
+      "should_initialize": true
+    },
+    "CellA_1": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0,
+      "should_initialize": false
+    },
+    "CellA": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
+    },
+    "CellA_2": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0,
+      "should_initialize": false
+    },
+    "CellC": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0,
+      "should_initialize": false
+    },
+    "CellB": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
+    }
+  }
+}
