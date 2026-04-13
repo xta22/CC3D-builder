@@ -232,6 +232,9 @@ class ManageRulesWindow(QWidget):
             elif beh == "differentiate":
                 new_data = self.main_editor.collect_diff_params_wizard()
             
+            elif beh == "create":
+                new_data = self.main_editor.collect_create_params_wizard()
+
             if new_data:
                 self._update_rule_content(rule, new_data)
                 updated = True
