@@ -56,6 +56,13 @@ def build_rule(behaviour, params):
             "distribution": params["distribution"]
         }
 
+    elif behaviour == "custom_script":
+        # we put parameters from UI into apply block
+        # so Steppable could retrieve value from params
+        apply_block = params.copy() 
+        # delete the manual types value from params in case redundancy
+        if "manual_types" in apply_block:
+            del apply_block["manual_types"]
     else:
         raise Exception("Unsupported behaviour")
 

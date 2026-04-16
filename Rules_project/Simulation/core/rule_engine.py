@@ -2,6 +2,7 @@ from cc3d.core.PySteppables import *
 import json
 import os
 import math
+import importlib.util
 
 from behaviour_plugins.growth_plugin import GrowthPlugin
 from behaviour_plugins.differentiate_plugin import DifferentiationPlugin
@@ -16,7 +17,7 @@ class RuleEngineSteppable(SteppableBasePy):
 
         self.rules = []
         self.create_queue = [] 
-
+        self.script_cache = {}
         self.behaviour_registry = {
             "growth": GrowthPlugin(self),
             "differentiate": DifferentiationPlugin(self),
@@ -64,8 +65,12 @@ class RuleEngineSteppable(SteppableBasePy):
 
             behaviour = rule["behaviour"]
 
+            if behaviour == "custom_script":
+                self.handle_custom_script_rule(rule)
+                continue# skip the plugin logic
+
             # =========================
-            # 🔵 GLOBAL （create）
+            # 🔵 GLOBAL （create） Create targets on cell doesn't exist yet, so it's exceptional.
             # =========================
             if behaviour == "create":
 
@@ -252,3 +257,41 @@ class RuleEngineSteppable(SteppableBasePy):
         f = getattr(self.field, field_name, None)
         if f: return f[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
         return 0.0
+    
+    def handle_custom_script_rule(self, rule):
+        if "cases" in rule and len(rule["cases"]) > 0:
+            case_apply = rule["cases"][0].get("apply", {})
+            script_path = case_apply.get("script_path")
+            raw_params = case_apply.get("apply_params", {})# retrieve the dict that you wrote in UI
+
+        if not script_path or not os.path.exists(script_path):
+            print(f"❌ [CustomScript] Path error: {script_path}")
+            return
+        
+        
+        try:
+            # check the cache in case repetitively write in 
+            if script_path not in self.script_cache:
+                spec = importlib.util.spec_from_file_location("custom_rule_mod", script_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                self.script_cache[script_path] = module
+            
+            module = self.script_cache[script_path]
+
+            # execute the script
+            if hasattr(module, "match") and module.match(self):
+                if hasattr(module, "run"):
+                    cleaned_params = {}
+                    for k, v in raw_params.items():
+                        try:
+                            # convert parameters to float
+                            cleaned_params[k] = float(v) if isinstance(v, str) else v
+                        except (ValueError, TypeError):
+                            # if cant then stay the same
+                            cleaned_params[k] = v
+                    # self pass in as context, scripts are then able to call other functions.
+                    module.run(self, cleaned_params) 
+                    
+        except Exception as e:
+            print(f"[RuleEngine] Error executing script {script_path}: {e}")

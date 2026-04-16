@@ -3,9 +3,11 @@ import os
 
 class SimulationRegistry:
 
-    def __init__(self, project_path):
+    def __init__(self, project_path,structure_manager=None):
 
         self.project_path = project_path
+
+        self.sm = structure_manager
 
         self.rules_path = os.path.join(
             project_path,
@@ -51,7 +53,10 @@ class SimulationRegistry:
 
         self.rules = data.get("rules", [])
         self.celltype_params = data.get("celltype_params", {})
-
+        
+        if self.sm:
+            self.sync_with_xml()
+        
         self._build_index()
 
     # ============================================================
@@ -151,7 +156,7 @@ class SimulationRegistry:
 
             active_inits = {}
             for name, params in self.celltype_params.items():
-                if params.get("should_initialize", True): # 默认初始化
+                if params.get("should_initialize", True): # initialize by default
                     count = params.get("initial_count", 5)
                     active_inits[name] = count
 
@@ -193,4 +198,25 @@ class SimulationRegistry:
             with open(internal_json_path, 'r', encoding='utf-8') as f:
                 self.rules = json.load(f)  
             return True
-        return False
+        return 
+
+    def sync_with_xml(self):
+        """
+        Syncronize the celltypes in XML to registry,
+        if there didn't exist then initialize them 
+        """
+        xml_names = self.sm.get_xml_cell_types()
+        modified = False
+        for name in xml_names:
+            if name not in self.celltype_params:
+                print(f"🔗 [Sync] Adding XML cell type to registry: {name}")
+                self.celltype_params[name] = {
+                    "should_initialize": True,
+                    "initial_count": 5,   
+                    "targetVolume": 50.0,
+                    "lambdaVolume": 2.0
+                }
+                modified = True
+        
+        if modified:
+            self.save() 

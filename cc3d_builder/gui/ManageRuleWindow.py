@@ -1,16 +1,20 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
     QMessageBox, QHeaderView, QAbstractItemView, QPushButton, QInputDialog, 
-    QGroupBox, QCheckBox, QSpinBox, QFormLayout, QScrollArea
+    QGroupBox, QCheckBox, QSpinBox, QFormLayout, QScrollArea, QDialog, QLineEdit,
+    QDialogButtonBox
 )
 from PyQt5.QtCore import Qt
 from core.rule_builder import build_rule
 from gui.build_model_gui import build_model_gui
+import importlib.util
+from utils_extensions.utils import process_custom_script, extract_params
 
 class ManageRulesWindow(QWidget):
-    def __init__(self, registry, main_editor = None):
+    def __init__(self, registry, ask_cell_func=None, main_editor = None):
         super().__init__()
         self.registry = registry
+        self.ask_cell_func = ask_cell_func
         self.main_editor = main_editor
         self.resize(1600, 800) 
         
@@ -241,6 +245,18 @@ class ManageRulesWindow(QWidget):
 
         if updated:
             self.registry.update_rule(rule_id, rule) 
+
+            from utils_extensions.utils import extract_celltypes_from_rule
+            mentioned_types = extract_celltypes_from_rule(rule)
+
+            for ct in mentioned_types:
+                if ct and ct not in self.registry.celltype_params:
+                    params_ct = self.main_editor.ask_celltype_params_gui(ct)
+                    if params_ct:
+                        self.registry.add_celltype_params(
+                            ct, params_ct["targetVolume"], params_ct["lambdaVolume"]
+                        )
+
             self.registry.save()
             self.save_and_sync()
             self.refresh_table()
@@ -370,3 +386,79 @@ class CellInventoryWidget(QGroupBox):
         self.registry.save()
         if self.on_changed_callback:
             self.on_changed_callback() 
+
+    def on_import_script(self):
+        file_path = self.get_file_path() 
+        if not file_path: return
+        
+        final_params = process_custom_script(
+            file_path = file_path,
+            registry = self.registry,
+            ask_params_func = self.main_editor.ask_celltype_params_gui,
+            extract_params_func = extract_params,
+            existing_params = self.current_rule.get("apply_params")
+        )
+        if final_params:
+            self.current_rule.apply_params = final_params
+            self.current_rule.script_path = file_path
+            self.refresh_table()
+
+#  for custom scripts parameter modification in MainRuleWindow 
+class ParamEditorDialog(QDialog):
+    def __init__(self, detected_keys, saved_params):
+        super().__init__()
+
+        self.setWindowTitle("Edit Script Parameters")
+        self.setMinimumWidth(400)
+
+        self.params_dict = saved_params or {} # saved {key: value}
+        self.detected_keys = detected_keys   # scanning by regularization  [key1, key2]
+        self.inputs = {} # dictionary for storing QLineEdit 
+        self.init_ui()
+        # UI layout:
+        # 1. Iterate over detected_keys: automatically create input fields, and populate them with values if they exist in saved_params.
+        # 2. Keep an "Add Custom Parameter" button at the bottom: used to manually add keys that were missed by the script.
+                
+
+    def init_ui(self):
+        self.main_layout = QVBoxLayout(self)
+        
+        self.form_layout = QFormLayout()
+        
+        # merge keys 
+        all_keys = sorted(list(set(self.detected_keys) | set(self.params_dict.keys())))
+        
+        for key in all_keys:
+            self.add_param_row(key, self.params_dict.get(key, ""))
+            
+        self.main_layout.addLayout(self.form_layout)
+
+        # 2. “Add Custom Parameter” buttom
+        self.add_btn = QPushButton("+ Add Custom Parameter (Manual)")
+        self.add_btn.clicked.connect(self.add_manual_param)
+        self.main_layout.addWidget(self.add_btn)
+
+        # 3. confirm/cancel button
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self.main_layout.addWidget(self.button_box)
+
+    def add_param_row(self, key, value):
+        """add a row of input frame in UI"""
+        line_edit = QLineEdit(str(value))
+        self.form_layout.addRow(f"<b>{key}</b>:", line_edit)
+        self.inputs[key] = line_edit
+
+    def add_manual_param(self):
+        """manually add regular expression fail to catch"""
+        key, ok = QInputDialog.getText(self, "Manual Add", "Enter Parameter Name:")
+        if ok and key:
+            if key not in self.inputs:
+                self.add_param_row(key, "")
+            else:
+                QMessageBox.information(self, "Info", "Parameter already exists.")
+
+    def get_final_params(self):
+        # after users click confirmation, all the key/value pairs would be packed up as dict and returned 
+        return {k: v.text() for k, v in self.inputs.items()}

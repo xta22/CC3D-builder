@@ -13,8 +13,10 @@ if __name__ == "__main__":
     from cli.cli_interface import cli_add_rule
     from registry.simulation_registry import SimulationRegistry
     from utils_extensions.utils import ask_celltype_params, handle_new_rule_registration
+    from core.structure_manager import StructureManager
 
-    registry = SimulationRegistry(project_path)
+    sm = StructureManager(project_path)
+    registry = SimulationRegistry(project_path, structure_manager=sm)
     registry.load()
 
     rule = cli_add_rule()
@@ -25,6 +27,12 @@ if __name__ == "__main__":
             rule, 
             ask_celltype_params 
         )
+
+        registry.add_rule(rule)
+        registry.save()
+        registry.export_to_xml()
         print("\nRule successfully added and injected ✔")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"\n❌ Error during rule registration: {e}")

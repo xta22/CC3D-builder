@@ -16,32 +16,16 @@ class ConstraintInitializerSteppable(SteppableBasePy):
         SteppableBasePy.__init__(self,frequency)
 
     def start(self):
-        # === CC3D_VOLUME_CELLB START ===
-        for cell in self.cell_list_by_type(self.CELLB):
-            cell.targetVolume = 50.0
-            cell.lambdaVolume = 10.0
-        # === CC3D_VOLUME_CELLB END ===
-        # === CC3D_VOLUME_CELLC START ===
-        for cell in self.cell_list_by_type(self.CELLC):
-            cell.targetVolume = 50.0
-            cell.lambdaVolume = 10.0
-        # === CC3D_VOLUME_CELLC END ===
-        # === CC3D_VOLUME_CELLA_2 START ===
-        for cell in self.cell_list_by_type(self.CELLA_2):
-            cell.targetVolume = 50.0
-            cell.lambdaVolume = 10.0
-        # === CC3D_VOLUME_CELLA_2 END ===
         # === CC3D_VOLUME_CELLA START ===
         for cell in self.cell_list_by_type(self.CELLA):
             cell.targetVolume = 50.0
             cell.lambdaVolume = 10.0
         # === CC3D_VOLUME_CELLA END ===
-        # === CC3D_VOLUME_CELLA_1 START ===
-        for cell in self.cell_list_by_type(self.CELLA_1):
+        # === CC3D_VOLUME_CELL START ===
+        for cell in self.cell_list_by_type(self.CELL):
             cell.targetVolume = 50.0
-            cell.lambdaVolume = 10.0
-        # === CC3D_VOLUME_CELLA_1 END ===
-        print("--INIT start --")
+            cell.lambdaVolume = 2.0
+        # === CC3D_VOLUME_CELL END ===
         # === CC3D_DICT_INIT START ===
         for cell in self.cell_list:
             if "state" not in cell.dict:
@@ -49,10 +33,6 @@ class ConstraintInitializerSteppable(SteppableBasePy):
                 cell.dict["requests"] = {}
                 cell.dict["_internal"] = {}
         # === CC3D_DICT_INIT END ===
-        # === CC3D_VOLUME_CELL START ===
-        for cell in self.cell_list_by_type(self.CELL):
-            cell.targetVolume = 50.0
-            cell.lambdaVolume = 10.0
 
     def step(self, mcs):
         return

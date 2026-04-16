@@ -339,3 +339,17 @@ class StructureManager:
             types.text = str(name).strip()
 
         self._indent(self.root)
+
+    def get_xml_cell_types(self):
+        """extract all TypeName from CellType Plugin in XML"""
+        plugin = self.root.find(".//Plugin[@Name='CellType']")
+        if plugin is None:
+            return []
+        
+        # exclude Medium
+        names = [
+            ct.attrib.get("TypeName") 
+            for ct in plugin.findall("CellType") 
+            if ct.attrib.get("TypeName") and ct.attrib.get("TypeName").lower() != "medium"
+        ]
+        return names

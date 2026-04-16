@@ -51,12 +51,15 @@ class ProjectLoader(QWidget):
             print(os.listdir(sim_path))
 
             from registry.simulation_registry import SimulationRegistry
-            print(">>> REGISTRY IMPORT OK <<<")
+            from core.structure_manager import StructureManager
+            print(">>> REGISTRY & STRUCTUREMANAGER IMPORT OK <<<")
+
+            sm = StructureManager(project_path)
 
             from gui.main_editor import MainWindow
             print(">>> MAINWINDOW IMPORT OK <<<")
 
-            self.registry = SimulationRegistry(project_path)
+            self.registry = SimulationRegistry(project_path, structure_manager=sm)
             print(">>> REGISTRY CREATED <<<")
 
             self.registry.load()

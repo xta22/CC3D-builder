@@ -13,15 +13,11 @@
         <CellType TypeId="0" TypeName="Medium"></CellType>
         <CellType TypeId="1" TypeName="Cell"></CellType>
         <CellType TypeName="CellA" TypeId="2"></CellType>
-        <CellType TypeName="CellA_1" TypeId="3"></CellType>
-        <CellType TypeName="CellA_2" TypeId="4"></CellType>
-        <CellType TypeName="CellC" TypeId="5"></CellType>
-        <CellType TypeName="CellB" TypeId="6"></CellType>
-        <CellType TypeName="CellD" TypeId="7"></CellType>
     </Plugin>
     <Plugin Name="CenterOfMass">
    </Plugin>
-    <Plugin Name="Volume"></Plugin>
+    <Plugin Name="Volume">
+        </Plugin>
     <Plugin Name="NeighborTracker">
    </Plugin>
     <Plugin Name="Contact">
@@ -32,36 +28,6 @@
         <Energy Type1="CellA" Type2="Medium">10.0</Energy>
         <Energy Type1="Cell" Type2="CellA">10.0</Energy>
         <Energy Type1="CellA" Type2="CellA">10.0</Energy>
-        <Energy Type1="CellA_1" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellA_1">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellA_1">10.0</Energy>
-        <Energy Type1="CellA_1" Type2="CellA_1">10.0</Energy>
-        <Energy Type1="CellA_2" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellA_2">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellA_2">10.0</Energy>
-        <Energy Type1="CellA_1" Type2="CellA_2">10.0</Energy>
-        <Energy Type1="CellA_2" Type2="CellA_2">10.0</Energy>
-        <Energy Type1="CellC" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellC">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellC">10.0</Energy>
-        <Energy Type1="CellA_1" Type2="CellC">10.0</Energy>
-        <Energy Type1="CellA_2" Type2="CellC">10.0</Energy>
-        <Energy Type1="CellC" Type2="CellC">10.0</Energy>
-        <Energy Type1="CellB" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellA_1" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellA_2" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellB" Type2="CellC">10.0</Energy>
-        <Energy Type1="CellB" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellD" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellD">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellD">10.0</Energy>
-        <Energy Type1="CellA_1" Type2="CellD">10.0</Energy>
-        <Energy Type1="CellA_2" Type2="CellD">10.0</Energy>
-        <Energy Type1="CellC" Type2="CellD">10.0</Energy>
-        <Energy Type1="CellB" Type2="CellD">10.0</Energy>
-        <Energy Type1="CellD" Type2="CellD">10.0</Energy>
     </Plugin>
     <Plugin Name="Chemotaxis">
         <ChemicalField Name="Oxygen">
@@ -94,25 +60,18 @@
     </Steppable>
     <Steppable Type="UniformInitializer">
         <Region>
-            <BoxMin x="74" y="83" z="0"></BoxMin>
-            <BoxMax x="87" y="96" z="1"></BoxMax>
+            <BoxMin x="44" y="180" z="0"></BoxMin>
+            <BoxMax x="64" y="200" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>Cell</Types>
         </Region>
         <Region>
-            <BoxMin x="170" y="12" z="0"></BoxMin>
-            <BoxMax x="183" y="25" z="1"></BoxMax>
+            <BoxMin x="222" y="113" z="0"></BoxMin>
+            <BoxMax x="243" y="134" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>CellA</Types>
-        </Region>
-        <Region>
-            <BoxMin x="198" y="269" z="0"></BoxMin>
-            <BoxMax x="211" y="282" z="1"></BoxMax>
-            <Gap>0</Gap>
-            <Width>5</Width>
-            <Types>CellB</Types>
         </Region>
     </Steppable>
 </CompuCell3D>

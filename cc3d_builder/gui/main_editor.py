@@ -6,10 +6,11 @@ import sys
 import os
 from core.rule_builder import build_rule
 from core.csv_importer import import_rules_from_csv
-from utils_extensions.utils import extract_celltypes_from_rule
+from utils_extensions.utils import extract_celltypes_from_rule, process_custom_script, extract_params, handle_new_rule_registration
 from core.structure_manager import StructureManager
 from injector.steppable_injector import SteppableInjector
 from injector.inject import process_and_inject_rule
+import re
 
 current_file_path = os.path.abspath(__file__) 
 
@@ -234,7 +235,6 @@ class MainWindow(QWidget):
         behaviour, params = result
         rule = build_rule(behaviour, params)
         
-        from utils_extensions.utils import extract_celltypes_from_rule, handle_new_rule_registration
         new_types = extract_celltypes_from_rule(rule)
         
         if not self.confirm_rule(rule, new_types):
@@ -284,31 +284,6 @@ class MainWindow(QWidget):
             print("❌ Export failed:", e)
 
         print("Saved")
-
-    '''
-    def ask_field(self, field):
-
-        name = field["name"]
-        ftype = field["type"]
-
-        if ftype == "str":
-            val, ok = QInputDialog.getText(self, name, name)
-        elif ftype == "int":
-            val, ok = QInputDialog.getInt(self, name, name)
-        elif ftype == "float":
-            val, ok = QInputDialog.getDouble(self, name, name)
-        elif ftype == "choice":
-            val, ok = QInputDialog.getItem(
-                self, name, name, field["options"], 0, False
-            )
-        else:
-            return None
-
-        if not ok:
-            return None
-
-        return val
-    '''
 
     def ask_placement_strategy(self):
         
@@ -370,7 +345,7 @@ class MainWindow(QWidget):
     
     def collect_params(self):
         # 1️get the “Behaviour”
-        behaviours = ["growth", "differentiate", "create", "death"]
+        behaviours = ["growth", "differentiate", "create", "death", "custom_script"]
         beh, ok = QInputDialog.getItem(self, "Step 1", "Select Behaviour:", behaviours, 0, False)
         if not ok: return None
 
@@ -383,6 +358,12 @@ class MainWindow(QWidget):
         if not ok: return None
         params["id"] = rule_id.strip() or str(default_id)
 
+        if beh == "custom_script": 
+            specific = self.collect_custom_script_wizard() 
+            if not specific: return None
+            params.update(specific)
+            return beh, params
+        
         # Target 
         target, ok = QInputDialog.getText(self, "Target", "Target cell type (or None):")
         if not ok: return None
@@ -416,6 +397,9 @@ class MainWindow(QWidget):
             specific = self.collect_create_params_wizard()
             if not specific: return None
             params.update(specific)
+
+        elif beh == "death":
+            pass
 
         return beh, params
 
@@ -518,335 +502,27 @@ class MainWindow(QWidget):
 
         res["distribution"] = dist
         return res
+    
 
-    '''
-    def collect_params(self):
-
-        params = {}
-
-        # =========================
-        # 1️⃣ behaviour
-        # =========================
-        behaviour, ok = QInputDialog.getItem(
-            self,
-            "Behaviour",
-            "Select behaviour:",
-            ["growth", "differentiate", "create"],
-            0,
-            False
-        )
-        if not ok:
-            return None
-
-        # =========================
-        # 2️⃣ id
-        # =========================
-        default_id = self.generate_rule_id()
-
-        rule_id, ok = QInputDialog.getText(
-            self,
-            "Rule ID",
-            "Rule ID (leave blank for auto):",
-            text=str(default_id)
-        )
-        if not ok:
-            return None
-
-        rule_id = rule_id.strip()
-        if not rule_id:
-            rule_id = str(default_id)
-
-        params["id"] = rule_id
-
-        # =========================
-        # 3️⃣ target
-        # =========================
-        target, ok = QInputDialog.getText(self, "Target", "Target (or None):")
-        if not ok:
-            return None
-
-        params["target"] = None if target.lower() == "none" else target
-
-        # =========================
-        # 4️⃣ condition（GUI ver）
-        # =========================
-        params["when"] = self.build_condition_gui() # 
-
-        if params["when"] is None:
-            return None
-
-        # ============================================================
-        # GROWTH
-        # ============================================================
-        if behaviour == "growth":
-            
-            # model
-            model, ok = QInputDialog.getItem(
-                self, 
-                "Growth Model", 
-                "Select model:", 
-                ["linear", "hill", "expression"],  # 添加 expression
-                0, 
-                False
-            )
-            if not ok:
-                return None
-            
-            regulator, ok = QInputDialog.getText(self, "Regulator", "Regulator (field name):")
-            if not ok:
-                return None
-            
-            # model
-            if model == "linear":
-                # Linear: y = alpha * x
-                alpha, ok = QInputDialog.getDouble(
-                    self, 
-                    "Alpha", 
-                    "Alpha (growth rate):", 
-                    0.01, 0.001, 10.0, 3
-                )
-                if not ok:
-                    return None
-                parameters = {"alpha": alpha}
-                
-            elif model == "hill":
-                # Hill: y = ymin + (ymax - ymin) * x^n / (k^n + x^n)
-                ymin, ok = QInputDialog.getDouble(
-                    self, 
-                    "Ymin", 
-                    "Minimum value (ymin):", 
-                    0.0, 0.0, 100.0, 3
-                )
-                if not ok:
-                    return None
-                    
-                ymax, ok = QInputDialog.getDouble(
-                    self, 
-                    "Ymax", 
-                    "Maximum value (ymax):", 
-                    1.0, 0.0, 100.0, 3
-                )
-                if not ok:
-                    return None
-                    
-                k, ok = QInputDialog.getDouble(
-                    self, 
-                    "K", 
-                    "Half-maximum concentration (k):", 
-                    0.5, 0.001, 100.0, 3
-                )
-                if not ok:
-                    return None
-                    
-                n, ok = QInputDialog.getDouble(
-                    self, 
-                    "n", 
-                    "Hill coefficient (n):", 
-                    2.0, 0.1, 10.0, 2
-                )
-                if not ok:
-                    return None
-                    
-                parameters = {
-                    "ymin": ymin,
-                    "ymax": ymax,
-                    "k": k,
-                    "n": n
-                }
-                
-            elif model == "expression":
-                expression, ok = QInputDialog.getText(
-                    self, 
-                    "Expression", 
-                    "Mathematical expression (e.g., '2*x + 1'):"
-                )
-                if not ok:
-                    return None
-                parameters = {"expression": expression}
-            
-            params["apply"] = {
-                "model": model,
-                "regulator": regulator,
-                "parameters": parameters
-            }
-
-        # ============================================================
-        # DIFFERENTIATE
-        # ============================================================
-        elif behaviour == "differentiate":
-            
-            # mode
-            mode, ok = QInputDialog.getItem(
-                self,
-                "Differentiate Mode",
-                "Select mode:",
-                ["type_switch", "division"],
-                0,
-                False
-            )
-            if not ok:
-                return None
-            
-            params["mode"] = mode
-            
-            if mode == "type_switch":
-                new_type, ok = QInputDialog.getText(self, "New Type", "New cell type:")
-                if not ok:
-                    return None
-                params["new_type"] = new_type
-                
-            else:  # mode == "division"
-                
-                # 1. type
-                div_type, ok = QInputDialog.getItem(
-                    self,
-                    "Division Type",
-                    "Select division type:",
-                    ["symmetric", "asymmetric"],
-                    0,
-                    False
-                )
-                if not ok:
-                    return None
-                
-                if div_type == "symmetric":
-                    daughter_type, ok = QInputDialog.getText(
-                        self, 
-                        "Daughter Type", 
-                        "Daughter cell type:"
-                    )
-                    if not ok:
-                        return None
-                    parent_type = daughter_type
-                    child_type = daughter_type
-                    
-                else:  # asymmetric
-                    parent_type, ok = QInputDialog.getText(
-                        self, 
-                        "Mother Type", 
-                        "Mother cell new type:"
-                    )
-                    if not ok:
-                        return None
-                        
-                    child_type, ok = QInputDialog.getText(
-                        self, 
-                        "Child Type", 
-                        "Daughter cell type:"
-                    )
-                    if not ok:
-                        return None
-                
-                params["parent_type"] = parent_type
-                params["child_type"] = child_type
-                
-                # 2. volume ratio
-                ratio, ok = QInputDialog.getDouble(
-                    self,
-                    "Volume Ratio",
-                    "Mother volume ratio (0-1, default 0.5):",
-                    0.5, 0.0, 1.0, 2
-                )
-                if not ok:
-                    return None
-                params["volume_ratio"] = ratio
-                
-                # division orientation
-                placement = self.ask_placement_strategy()
-                if placement is None:
-                    return None
-                params["placement"] = placement
+    def collect_custom_script_wizard(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Script", "", "Python (*.py)")
+        if not file_path: return None
         
-
-
-        # ============================================================
-        # CREATE
-        # ============================================================
-        elif behaviour == "create":
-
-            cell_type, ok = QInputDialog.getText(self, "Cell Type", "Cell Type:")
-            if not ok:
-                return
-
-            count, ok = QInputDialog.getInt(self, "Count", "Count:", 10)
-            if not ok:
-                return
-
-            params["cell_type"] = cell_type
-            params["count"] = count
-
-            dist_type, ok = QInputDialog.getItem(
-                self,
-                "Distribution",
-                "Type:",
-                ["random", "cluster", "stripe"],
-                0,
-                False
-            )
-            if not ok:
-                return
-
-            dist = {"type": dist_type}
-
-            if dist_type == "cluster":
-                cx, _ = QInputDialog.getInt(self, "center_x", "center_x:")
-                cy, _ = QInputDialog.getInt(self, "center_y", "center_y:")
-                r, _ = QInputDialog.getInt(self, "radius", "radius:")
-                dist.update({"center": [cx, cy], "radius": r})
-
-            elif dist_type == "stripe":
-
-                direction, _ = QInputDialog.getItem(
-                    self, "Direction", "Direction:",
-                    ["vertical", "horizontal"], 0, False
-                )
-                dist["direction"] = direction
-
-                mode, _ = QInputDialog.getItem(
-                    self, "Mode", "Mode:",
-                    ["gap", "end"], 0, False
-                )
-
-                if direction == "vertical":
-                    x, _ = QInputDialog.getInt(self, "x", "x:")
-                    y_start, _ = QInputDialog.getInt(self, "y_start", "y_start:")
-                    dist.update({"x": x, "y_start": y_start})
-
-                    if mode == "gap":
-                        dist["y_gap"] = QInputDialog.getInt(self, "y_gap", "y_gap:")[0]
-                    else:
-                        dist["y_end"] = QInputDialog.getInt(self, "y_end", "y_end:")[0]
-
-                else:
-                    y, _ = QInputDialog.getInt(self, "y", "y:")
-                    x_start, _ = QInputDialog.getInt(self, "x_start", "x_start:")
-                    dist.update({"y": y, "x_start": x_start})
-
-                    if mode == "gap":
-                        dist["x_gap"] = QInputDialog.getInt(self, "x_gap", "x_gap:")[0]
-                    else:
-                        dist["x_end"] = QInputDialog.getInt(self, "x_end", "x_end:")[0]
-
-            params["distribution"] = dist
-        # =========================
-        # flags
-        # =========================
-        once_reply = QMessageBox.question(
-            self, "Trigger Once", "Trigger once?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+        final_params = process_custom_script(
+            file_path = file_path,
+            registry = self.registry,
+            ask_params_func = self.ask_celltype_params_gui,
+            extract_params_func = extract_params,    
+            existing_params = None
         )
-        params["once"] = (once_reply == QMessageBox.Yes)
+        print(f"DEBUG: Detected Params -> {final_params}") # 👈 加这一
+        if final_params:
+            return {
+                "script_path": file_path,
+                "apply_params": final_params
+            }
+        return None
 
-        debug_reply = QMessageBox.question(
-            self, "Debug", "Enable debug?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        params["debug"] = (debug_reply == QMessageBox.Yes)
-
-        return behaviour, params
-    '''
     def clicked_import_csv(self):
 
         path, _ = QFileDialog.getOpenFileName(
@@ -892,7 +568,7 @@ class MainWindow(QWidget):
             return
         # “Pass in self so that ManageRulesWindow can access all the methods of the main window.”
         from gui.ManageRuleWindow import ManageRulesWindow
-        self.manage_win = ManageRulesWindow(self.registry, main_editor=self)
+        self.manage_win = ManageRulesWindow(self.registry, ask_cell_func=self.ask_celltype_params_gui, main_editor=self)
         self.manage_win.show()
 
     def build_condition_gui(self):
@@ -902,13 +578,32 @@ class MainWindow(QWidget):
 
 
 
+if __name__ == "__main__":
+    from core.registry import SimulationRegistry 
+    from core.structure_manager import StructureManager
 
+    app = QApplication(sys.path)
 
+    # 1. 确定项目路径（这里假设你已经有 project_path，或者通过对话框获取）
+    # 如果你是启动时选择项目，逻辑应放在加载项目的方法里
+    project_path = "/Users/xiaoyue/src/bioinfo/project/Rules_project" 
 
+    # 2. 创建 StructureManager (SM)
+    # 它会读取 Rules_project.xml
+    sm = StructureManager(project_path)
 
+    # 3. 创建 Registry 并注入 SM
+    # 注意：你需要修改 registry.py 的 __init__ 以接收 structure_manager 参数
+    reg = SimulationRegistry(project_path, structure_manager=sm)
 
+    # 4. 执行加载（此时内部会自动调用 sm.get_xml_cell_types 进行同步）
+    reg.load()
 
+    # 5. 启动 GUI
+    window = MainWindow(registry=reg)
+    window.show()
 
+    sys.exit(app.exec_())
 
 
 

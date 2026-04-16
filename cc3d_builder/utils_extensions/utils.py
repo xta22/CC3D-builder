@@ -1,3 +1,4 @@
+import re
 def extract_celltypes_from_rule(rule):
     """
     catch cell types
@@ -21,7 +22,7 @@ def extract_celltypes_from_rule(rule):
                 types.add(target_type)
 
         apply_data = case.get("apply", {})
-        
+        print(f"APPLY_DATA:{apply_data}")
         if apply_data.get("new_type"):
             types.add(apply_data["new_type"])
             
@@ -30,6 +31,9 @@ def extract_celltypes_from_rule(rule):
             
         if apply_data.get("child_type"):
             types.add(apply_data["child_type"])
+
+        if apply_data.get("cell_type"):
+            types.add(apply_data["cell_type"]) 
 
     valid_types = {str(t).strip() for t in types if t and str(t).strip()}
     
@@ -76,4 +80,58 @@ def handle_new_rule_registration(registry, rule, ask_params_func):
     # 3. XML and steppable injection
     process_and_inject_rule(registry.project_path, registry, rule)
 
+def process_custom_script(file_path, registry, ask_params_func, extract_params_func=None, existing_params=None):
+        """
+        scanning the scripts, find and register for new cells, pop out the editting window.
+        """
+        # A. static (Params)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
 
+
+        if extract_params_func:
+            # passed in as an argument
+            detected_keys = extract_params_func(content)
+        else:
+            # local extract_params
+            detected_keys = extract_params(content)
+
+        # B. dynamic (Cell Types)
+        import importlib.util
+        new_types = []
+        try:
+            spec = importlib.util.spec_from_file_location("temp_mod", file_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            new_types = getattr(module, "REQUIRED_CELL_TYPES", [])
+        except Exception as e:
+            print(f"Type detection skip: {e}")
+
+        # C. register for new cells
+        for ct in new_types:
+            if ct not in registry.celltype_params:
+                p = ask_params_func(ct)
+                if p:
+                    registry.add_celltype_params(ct, p["targetVolume"], p["lambdaVolume"])
+
+        # D. pop out parameter editting tools
+        from gui.ManageRuleWindow import ParamEditorDialog
+        dialog = ParamEditorDialog(detected_keys, existing_params or {})
+        if dialog.exec_():
+            final_p = dialog.get_final_params()
+            final_p["manual_types"] = new_types 
+            return final_p
+        
+        return None
+
+
+def extract_params(content):
+    # 1. match params['key']
+    # 2. match params.get('key', ...)
+    pattern = r"params(?:\[['\"]|\.get\(['\"])(.+?)(?:['\"][, \)]|['\"]\])"
+    
+    matches = re.findall(pattern, content)
+    # exclude get 
+    unique_params = sorted(list(set(m for m in matches if m != 'get')))
+    print(f">>> DEBUG: Regex extracted: {unique_params}")
+    return unique_params
