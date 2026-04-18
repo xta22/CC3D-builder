@@ -9,11 +9,16 @@ class DifferentiateSteppable(MitosisSteppableBase):
         self.engine = engine
 
     def step(self, mcs):
-
+        if self.cell_list is None: 
+            return
+        
+        if self.engine is None:
+            return
+        
         cells_to_divide = []
 
         for cell in self.cell_list:
-
+            
             # =========================
             # 1️⃣ TYPE SWITCH
             # =========================
@@ -67,10 +72,13 @@ class DifferentiateSteppable(MitosisSteppableBase):
     # =========================
     # =========================
     def update_attributes(self):
-
+        
         parent = self.parent_cell
         child = self.child_cell
 
+        if parent is None or child is None:
+            return
+        
         request = parent.dict.get("_internal", {}).get("division_request")
 
         if not request:

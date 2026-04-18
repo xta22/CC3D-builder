@@ -1,11 +1,12 @@
 from cc3d.core.PySteppables import *
-from core.model_registry import MODEL_REGISTRY
+from Rules_project.Simulation.core.model_registry import MODEL_REGISTRY
 
 
 class GrowthSteppable(SteppableBasePy):
 
     def step(self, mcs):
-
+        if self.cell_list is None: return
+        
         for cell in self.cell_list:
 
             # -------------------------

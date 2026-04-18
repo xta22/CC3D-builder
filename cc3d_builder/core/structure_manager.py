@@ -1,7 +1,7 @@
-import os
 import xml.etree.ElementTree as ET
 import random
-
+from pathlib import Path 
+# import os # only for compatibility of ElementTree.write
 
 class StructureManager:
     DEPENDENCY_MAP = {
@@ -13,14 +13,9 @@ class StructureManager:
         # future registered new conditions would be added here.
     }
     def __init__(self, project_path):
-        self.project_path = project_path
-        self.xml_path = os.path.join(
-            project_path,
-            "Simulation",
-            os.path.basename(project_path) + ".xml"
-        )
-
-        self.tree = ET.parse(self.xml_path)
+        self.project_path = Path(project_path)
+        self.xml_path = self.project_path / "Simulation" / f"{self.project_path.name}.xml"
+        self.tree = ET.parse(str(self.xml_path))
         self.root = self.tree.getroot()
 
         self._seen_celltypes = set()
@@ -50,7 +45,6 @@ class StructureManager:
                 
         if modified:
             self.save()
-
 
     def _ensure_plugin_exists(self, plugin_name):
         """
@@ -97,7 +91,6 @@ class StructureManager:
                 for item in current:
                     stack.append(item)
 
-
     # ============================================================
     # VOLUME PLUGIN MANAGEMENT
     # ============================================================
@@ -118,6 +111,7 @@ class StructureManager:
             print("[StructureManager] Empty Volume plugin added for Python control.")
             
         self.save()
+        
     # ============================================================
     # CELLTYPE
     # ============================================================
@@ -167,10 +161,13 @@ class StructureManager:
             return
 
         celltype_plugin = self.root.find(".//Plugin[@Name='CellType']")
-        all_types = [
-            ct.attrib["TypeName"]
-            for ct in celltype_plugin.findall("CellType")
-        ]
+        if celltype_plugin is not None:
+            all_types = [
+                ct.attrib["TypeName"]
+                for ct in celltype_plugin.findall("CellType")
+            ]
+        else: 
+            all_types = []
 
         existing_pairs = set()
 
@@ -201,12 +198,17 @@ class StructureManager:
             return
 
         potts = self.root.find(".//Potts")
-        dims = potts.find("Dimensions")
+        if potts is not None:
 
-        max_x = int(dims.attrib["x"])
-        max_y = int(dims.attrib["y"])
-        max_z = int(dims.attrib["z"])
-
+            dims = potts.find("Dimensions")
+            if dims is not None:
+                max_x = int(dims.attrib.get("x", 256))
+                max_y = int(dims.attrib.get("y", 256))
+                max_z = int(dims.attrib.get("z", 1))
+            else:
+                max_x, max_y, max_z = 256, 256, 1
+        else: max_x, max_y, max_z = 256, 256, 1
+        
         PATCH_SIZE = 5
         MARGIN = 5
 
@@ -247,13 +249,13 @@ class StructureManager:
             self._indent(self.root, 0)
 
         self.tree.write(
-            self.xml_path,
+            str(self.xml_path),
             encoding="utf-8",
             xml_declaration=False,
             short_empty_elements=False
         )
 
-        print("SAVE DONE")
+        print("✅[StructureManager] SAVE DONE")
 
     def _indent(self, elem, level=0):
         indent_str = "\n" + level * "    "
@@ -306,11 +308,17 @@ class StructureManager:
 
         # retrieve the map size
         potts = self.root.find(".//Potts")
-        dims = potts.find("Dimensions")
-        max_x = int(dims.attrib["x"])
-        max_y = int(dims.attrib["y"])
-        max_z = int(dims.attrib["z"])
+        if potts is not None:
+            dims = potts.find("Dimensions")
+            if dims is not None:
 
+                max_x = int(dims.attrib.get("x", 256))
+                max_y = int(dims.attrib.get("y", 256))
+                max_z = int(dims.attrib["z"])
+
+            else:  max_x, max_y, max_z = 256, 256, 1
+        else: max_x, max_y, max_z = 256, 256, 1
+        
         PATCH_SIZE = 5
         MARGIN = 10 # incase out of boundary 
 
@@ -325,7 +333,7 @@ class StructureManager:
             x_max = x_min + side_length
             y_max = y_min + side_length
 
-            # 写入 XML
+            # write into XML
             boxmin = ET.SubElement(region, "BoxMin")
             boxmin.set("x", str(x_min)); boxmin.set("y", str(y_min)); boxmin.set("z", "0")
 
@@ -350,6 +358,6 @@ class StructureManager:
         names = [
             ct.attrib.get("TypeName") 
             for ct in plugin.findall("CellType") 
-            if ct.attrib.get("TypeName") and ct.attrib.get("TypeName").lower() != "medium"
+            if (name := ct.attrib.get("TypeName")) and name.lower() != "medium"
         ]
         return names

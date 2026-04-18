@@ -1,6 +1,6 @@
 # cli_interface.py
 
-from core.rule_builder import build_rule
+from cc3d_builder.core.rule_builder import build_rule
 
 
 def cli_add_rule():
@@ -39,7 +39,7 @@ def cli_add_rule():
     # CONDITION
     # =========================
 
-    from core.condition_builder import build_condition
+    from cc3d_builder.cli.condition_builder import build_condition
     params["when"] = build_condition()
 
     # ============================================================
@@ -48,7 +48,7 @@ def cli_add_rule():
 
     if behaviour == "growth":
 
-        from core.model_builder import build_model
+        from cc3d_builder.core.model_builder import build_model
         params["apply"] = build_model()
 
     # ============================================================

@@ -1,33 +1,28 @@
 # steppable_injector.py
-
-import os
-
+from pathlib import Path
 
 class SteppableInjector:
 
     def __init__(self, project_path):
-        self.project_path = project_path
-
-        sim_dir = os.path.join(project_path, "Simulation")
-
-        for fname in os.listdir(sim_dir):
-            if fname.endswith("Steppables.py"):
-                self.steppable_path = os.path.join(sim_dir, fname)
-                break
+        self.project_path = Path(project_path).resolve()
+        sim_dir = self.project_path / "Simulation"
+        if not sim_dir.exists():
+            raise Exception(f"Simulation directory not found at: {sim_dir}")
+        steppable_files = list(sim_dir.glob("*Steppables.py"))
+        if steppable_files:
+            self.steppable_path = steppable_files[0]
         else:
-            raise Exception("Steppables file not found")
+            raise Exception(f"No Steppables.py file found in {sim_dir}")
 
     # =============================
     # FILE IO
     # =============================
 
     def _read_file(self):
-        with open(self.steppable_path, "r") as f:
-            return f.read()
+        return self.steppable_path.read_text(encoding="utf-8")
 
     def _write_file(self, content):
-        with open(self.steppable_path, "w") as f:
-            f.write(content)
+        self.steppable_path.write_text(content, encoding="utf-8")
 
     # =============================
     # INSERT INTO start()
@@ -63,8 +58,9 @@ class SteppableInjector:
                 inserted = True
 
         if not inserted:
-            raise Exception("Could not find start() function")
-
+            print(f"⚠️ [Warning] Could not find start() function in {self.steppable_path.name}")
+            return content
+            
         return "\n".join(new_lines)
 
     # =============================
@@ -74,7 +70,6 @@ class SteppableInjector:
     def ensure_dict_init(self):
 
         content = self._read_file()
-
         block = [
             "for cell in self.cell_list:",
             "    if \"state\" not in cell.dict:",
@@ -103,7 +98,6 @@ class SteppableInjector:
                                 lambda_volume):
 
         content = self._read_file()
-
         upper = celltype_name.upper()
         marker = f"CC3D_VOLUME_{upper}"
 

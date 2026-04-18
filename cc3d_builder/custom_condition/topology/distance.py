@@ -1,14 +1,11 @@
 import operator
 import sys
-
-
-## 这里不能写死 better change
-sys.path.append("/Users/xiaoyue/src/bioinfo/project/Rules_project/simulation")
-
+from pathlib import Path
+from cc3d_builder.utils_extensions.paths import ROOT, SIMULATION_DIR
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.rule_engine import RuleEngine
+    from Rules_project.Simulation.core.rule_engine import RuleEngineSteppable
 
 OPS = {
     ">": operator.gt,
@@ -19,7 +16,7 @@ OPS = {
     "!=": operator.ne
 }
 
-def evaluate(cell, engine: 'RuleEngine', params: dict):
+def evaluate(cell, engine: 'RuleEngineSteppable', params: dict):
 
     target_type = params.get("target_type")
     threshold = params.get("threshold", 10.0)

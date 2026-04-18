@@ -1,6 +1,6 @@
 import random
 from cc3d.core.PySteppables import SteppableBasePy
-from core.rule_engine import RuleEngineSteppable
+from Rules_project.Simulation.core.rule_engine import RuleEngineSteppable
 import numpy as np
 
 class CreateSteppable(SteppableBasePy):
@@ -10,7 +10,7 @@ class CreateSteppable(SteppableBasePy):
         self.engine = engine
 
     def step(self, mcs):
-
+        if self.engine is None: return
         queue = self.engine.create_queue
 
         if queue:
@@ -23,14 +23,17 @@ class CreateSteppable(SteppableBasePy):
         self.engine.create_queue = []
 
     def _place_cell(self, type_id, cell_type, x, y):
-
+        if self.engine is None: return
         new_cell = self.new_cell(type_id)
-
         params = self.engine.celltype_params.get(cell_type, {})
 
         new_cell.targetVolume = params.get("targetVolume", 50)
         new_cell.lambdaVolume = params.get("lambdaVolume", 50)
 
+        if self.cell_field is None:
+            print("Error: cell_field is not initialized")
+            return
+        
         self.cell_field[x, y, 0] = new_cell
 
         return new_cell
@@ -73,7 +76,10 @@ class CreateSteppable(SteppableBasePy):
     # ============================================================
 
     def _create_random(self, type_id, cell_type, count, dist):
-
+        if self.cell_field is None:
+            print("❌ Error: cell_field is not initialized!")
+            return
+        
         x_start = dist.get("x_start", 0)
         x_end   = dist.get("x_end", self.dim.x)
 
@@ -94,7 +100,6 @@ class CreateSteppable(SteppableBasePy):
                 created += 1
 
             attempts += 1
-
 
     def _create_stripe(self, type_id, cell_type, count, dist):
 
@@ -169,6 +174,10 @@ class CreateSteppable(SteppableBasePy):
         print(f"[Create] stripe created {len(coords)} cells")
 
     def _create_cluster(self, type_id, cell_type, count, dist):
+
+        if self.cell_field is None:
+            print("❌ Error: cell_field is not initialized!")
+            return
 
         cx, cy = dist.get("center", [self.dim.x // 2, self.dim.y // 2])
         radius = dist.get("radius", 20)

@@ -1,14 +1,21 @@
-from cc3d.core.PySteppables import *
+
 import json
-import os
+from pathlib import Path
 import math
 import importlib.util
+import sys
 
-from behaviour_plugins.growth_plugin import GrowthPlugin
-from behaviour_plugins.differentiate_plugin import DifferentiationPlugin
-from core.condition_evaluator import evaluate_condition
-from behaviour_plugins.create_plugin import CreatePlugin
-from cc3d.core.PySteppables import *
+current_file = Path(__file__).resolve()
+sim_dir = current_file.parents[1] # /Simulation
+if str(sim_dir) not in sys.path:
+    sys.path.insert(0, str(sim_dir))
+
+from cc3d.core.PySteppables import *  # cc3d has its own built-in python interpreter 
+
+from Rules_project.Simulation.behaviour_plugins.growth_plugin import GrowthPlugin
+from Rules_project.Simulation.behaviour_plugins.differentiate_plugin import DifferentiationPlugin
+from Rules_project.Simulation.core.condition_evaluator import evaluate_condition
+from Rules_project.Simulation.behaviour_plugins.create_plugin import CreatePlugin
 
 class RuleEngineSteppable(SteppableBasePy):
 
@@ -24,7 +31,6 @@ class RuleEngineSteppable(SteppableBasePy):
             "create": CreatePlugin(self), 
         }
 
-
     # ============================================================
     # INIT
     # ============================================================
@@ -33,14 +39,14 @@ class RuleEngineSteppable(SteppableBasePy):
         self.load_rules()
 
     def load_rules(self):
-        project_dir = self.simulator.getBasePath()
-        path = os.path.join(project_dir, "Simulation", "config", "rules.json")
-
-        if not os.path.exists(path):
-            print("[RuleEngine] No rules.json found")
+        project_dir = Path(self.simulator.getBasePath())
+        rules_path = project_dir / "Simulation" / "config" / "rules.json"
+        
+        if not rules_path.exists():
+            print(f"ℹ️ [RuleEngine] No rules.json found at {rules_path}")
             return
 
-        with open(path) as f:
+        with rules_path.open('r', encoding='utf-8') as f:
             data = json.load(f)
 
         self.rules = data.get("rules", [])
@@ -261,18 +267,26 @@ class RuleEngineSteppable(SteppableBasePy):
     def handle_custom_script_rule(self, rule):
         if "cases" in rule and len(rule["cases"]) > 0:
             case_apply = rule["cases"][0].get("apply", {})
-            script_path = case_apply.get("script_path")
+            script_path_str = case_apply.get("script_path")
             raw_params = case_apply.get("apply_params", {})# retrieve the dict that you wrote in UI
 
-        if not script_path or not os.path.exists(script_path):
-            print(f"❌ [CustomScript] Path error: {script_path}")
+        if not script_path_str:
+            print(f"❌ [CustomScript] Path error: {script_path_str}")
             return
         
+        script_path = Path(script_path_str)
+
+        if not script_path.exists():
+            print(f"❌ [CustomScript] Path error: {script_path}")
+            return
         
         try:
             # check the cache in case repetitively write in 
             if script_path not in self.script_cache:
                 spec = importlib.util.spec_from_file_location("custom_rule_mod", script_path)
+                if spec is None or spec.loader is None:
+                    print(f"[Custom Error] Cannot load module from {script_path}")
+                    return False
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 self.script_cache[script_path] = module

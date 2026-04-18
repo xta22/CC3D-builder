@@ -122,32 +122,6 @@ def expression_model(apply, cell, engine):
     except Exception as e:
         print(f"Expression Eval Error: {e} | Expr: {expr} | Vars: {local_vars.keys()}")
         return
-'''
-def expression_model(apply, cell, engine):
-    params = apply.get("parameters", {})
-    expr = params.get("expression")
-
-    if not expr:
-        return 0.0
-
-    local_vars = {}
-
-    for name in dir(engine.field):
-        try:
-            field = getattr(engine.field, name)
-            local_vars[name] = field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
-        except:
-            continue
-
-    SAFE = {"min": min, "max": max, "abs": abs, "math": math}
-
-    try:
-        print(f"DEBUG: Eval Expr: {expr} | Vars: {local_vars}") 
-        return eval(expr, {"__builtins__": None}, {**SAFE, **local_vars})
-    except Exception as e:
-        print(f"!!! Eval Error for Cell {cell.id}: {e}")
-        return 0.0
-'''
 
 # ================================
 # REGISTRY

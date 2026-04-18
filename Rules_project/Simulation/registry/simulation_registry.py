@@ -1,5 +1,6 @@
 import json
-import os
+from pathlib import Path
+from cc3d_builder.core.structure_manager import StructureManager
 
 class SimulationRegistry:
 
@@ -9,20 +10,10 @@ class SimulationRegistry:
 
         self.sm = structure_manager
 
-        self.rules_path = os.path.join(
-            project_path,
-            "Simulation",
-            "config", 
-            "rules.json"
-        )
-        self.xml_path = os.path.join(
-            project_path,
-            "Simulation",
-            "Rules_project.xml"
-        )
+        self.rules_path = self.project_path / "Simulation" / "config" / "rules.json"
+        self.xml_path = self.project_path / "Simulation" / "Rules_project.xml"
 
         self.rules = []
-
         self.cell_index = {}
         self.behaviour_index = {}
         self.celltype_params = {}
@@ -39,13 +30,12 @@ class SimulationRegistry:
     # ============================================================
 
     def load(self):
-
-        if not os.path.exists(self.rules_path):
+        if not self.rules_path.exists():
             self.rules = []
             self.celltype_params = {}
             return
 
-        with open(self.rules_path, "r") as f:
+        with self.rules_path.open("r", encoding='utf-8') as f:
             data = json.load(f)
 
         if not isinstance(data, dict):
@@ -69,10 +59,8 @@ class SimulationRegistry:
         self.behaviour_index = {}
 
         for rule in self.rules:
-
             cell = rule.get("target")
             behaviour = rule.get("behaviour")
-
             self.cell_index.setdefault(cell, []).append(rule)
             self.behaviour_index.setdefault(behaviour, []).append(rule)
 
@@ -83,7 +71,6 @@ class SimulationRegistry:
     def add_rule(self, rule):
 
         self.rules.append(rule)
-
         self._build_index()
         self.save()
 
@@ -94,7 +81,6 @@ class SimulationRegistry:
     def delete_rule(self, rule_id):
 
         self.rules = [r for r in self.rules if r.get("id") != rule_id]
-
         self._build_index()
         self.save()
 
@@ -120,20 +106,6 @@ class SimulationRegistry:
         return self.rules
 
     # ============================================================
-    # MODIFY
-    # ============================================================
-
-    def update_rule(self, rule_id, new_rule):
-
-        for i, r in enumerate(self.rules):
-            if r["id"] == rule_id:
-                self.rules[i] = new_rule
-                break
-
-        self._build_index()
-        self.save()
-
-    # ============================================================
     # SAVE JSON
     # ============================================================
 
@@ -148,7 +120,6 @@ class SimulationRegistry:
     # ============================================================
 
     def export_to_xml(self):
-            from core.structure_manager import StructureManager
             sm = StructureManager(self.project_path)
 
             for name in self.celltype_params.keys():
@@ -175,36 +146,31 @@ class SimulationRegistry:
         for i, rule in enumerate(self.rules):
             if str(rule.get("id")) == str(rule_id):
                 self.rules[i] = new_rule
+                self._build_index() 
+                self.save()
+                print(f"✅ Rule {rule_id} updated and saved.")
                 return True
+        print(f"⚠️ Rule {rule_id} not found for update.")    
         return False
-    
-    '''
-    def export_to_internal_json(self):
-        """Silently save current rules state in json."""
-        internal_json_path = os.path.join(self.project_path,"Simulation", "config", "rules.json")
-        
-        # make sure config folder exists
-        os.makedirs(os.path.dirname(internal_json_path), exist_ok=True)
-        
-        with open(internal_json_path, 'w', encoding='utf-8') as f:
-            json.dump(self.rules, f, indent=4, ensure_ascii=False)
-    '''
     
     def load_from_internal_json(self):
         """When the software starts or a project is loaded, restore the rules from the internal JSON."""
-        internal_json_path = os.path.join(self.project_path, "Simulation", "config", "rules.json")
-        
-        if os.path.exists(internal_json_path):
-            with open(internal_json_path, 'r', encoding='utf-8') as f:
-                self.rules = json.load(f)  
+        if self.rules_path.exists():
+            with self.rules_path.open('r', encoding='utf-8') as f:
+                data = json.load(f)
+                self.rules = data.get("rules", []) if isinstance(data, dict) else data
             return True
-        return 
+        return False
 
     def sync_with_xml(self):
         """
         Syncronize the celltypes in XML to registry,
         if there didn't exist then initialize them 
         """
+        if self.sm is None:
+            print("⚠️ [Sync] StructureManager not provided, skipping sync.")
+            return
+
         xml_names = self.sm.get_xml_cell_types()
         modified = False
         for name in xml_names:

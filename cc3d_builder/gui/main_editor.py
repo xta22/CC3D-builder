@@ -4,25 +4,28 @@ from PyQt5.QtWidgets import (
 )
 import sys
 import os
-from core.rule_builder import build_rule
-from core.csv_importer import import_rules_from_csv
-from utils_extensions.utils import extract_celltypes_from_rule, process_custom_script, extract_params, handle_new_rule_registration
-from core.structure_manager import StructureManager
-from injector.steppable_injector import SteppableInjector
-from injector.inject import process_and_inject_rule
+from pathlib import Path
+from cc3d_builder.core.rule_builder import build_rule
+from cc3d_builder.core.csv_importer import import_rules_from_csv
+from cc3d_builder.utils_extensions.utils import process_custom_script, extract_params, handle_new_rule_registration
+from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule
+from cc3d_builder.core.structure_manager import StructureManager
+from cc3d_builder.injector.steppable_injector import SteppableInjector
+from cc3d_builder.injector.inject import process_and_inject_rule
+from cc3d_builder.utils_extensions.paths import ROOT, SANDBOX_DIR
+from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
 import re
+from typing import Any
 
-current_file_path = os.path.abspath(__file__) 
+PROJECT_ROOT = Path(__file__).resolve().parents[2] 
 
-gui_dir = os.path.dirname(current_file_path)
-builder_root = os.path.dirname(gui_dir) 
-if builder_root not in sys.path:
-    sys.path.insert(0, builder_root)
-    print(f"✅ Dynamic Builder Root: {builder_root}")
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+    print(f"✅ Framework Root Injected: {PROJECT_ROOT}")
 
 class MainWindow(QWidget):
 
-    def __init__(self, registry=None):
+    def __init__(self, registry: SimulationRegistry | None = None):
         
         super().__init__()
         print(">>> ENTER MAIN WINDOW INIT <<<")
@@ -37,7 +40,6 @@ class MainWindow(QWidget):
         self.exit_btn = QPushButton("Exit")
         self.manage_rules_btn = QPushButton("Manage Rules (Table View)")
         self.manage_rules_btn.clicked.connect(self.open_manage_rules)
-
 
         self.add_btn.clicked.connect(self.add_rule)
         self.save_btn.clicked.connect(self.save)
@@ -109,6 +111,9 @@ class MainWindow(QWidget):
     
     def confirm_rule(self, rule, new_types):
         """show rules for users to confirm"""
+        if self.registry is None:
+            return False
+        
         rule_id = rule.get("id", "?")
         behaviour = rule.get("behaviour", "?")
         
@@ -279,7 +284,7 @@ class MainWindow(QWidget):
         self.registry.save()
 
         try:
-            self.registry.export_to_xml()   # 🔥 加这一行
+            self.registry.export_to_xml()  
         except Exception as e:
             print("❌ Export failed:", e)
 
@@ -383,7 +388,7 @@ class MainWindow(QWidget):
         # dispatch behavior‑specific parameter collection
         # These functions return only business‑level parameters and do not interfere with the generic parameters above
         if beh == "growth":
-            from gui.build_model_gui import build_model_gui
+            from cc3d_builder.gui.build_model_gui import build_model_gui
             apply_data = build_model_gui(beh)
             if not apply_data: return None
             params["apply"] = apply_data # growth would be packed
@@ -412,7 +417,7 @@ class MainWindow(QWidget):
         )
         if not ok: return None
 
-        res = {"mode": mode}
+        res: dict[str, Any] = {"mode": mode}
 
         if mode == "type_switch":
             # --- mode A ---
@@ -426,7 +431,8 @@ class MainWindow(QWidget):
             child_type, ok2 = QInputDialog.getText(self, "Division", "Child Cell Type:")
             ratio, ok3 = QInputDialog.getDouble(self, "Division", "Volume Ratio (0.0-1.0):", 0.5, 0, 1, 2)
             
-            if not (ok1 and ok2 and ok3): return None
+            if not (ok1 and ok2 and ok3): 
+                return None
             
             res.update({
                 "parent_type": parent_type.strip(),
@@ -446,7 +452,7 @@ class MainWindow(QWidget):
         """
         Parameter collection wizard dedicated to Create
         """
-        res = {}
+        res: dict[str, Any] = {}
 
         cell_type, ok = QInputDialog.getText(self, "Create Cells", "Cell Type:")
         if not ok: return None
@@ -461,7 +467,7 @@ class MainWindow(QWidget):
         )
         if not ok: return None
 
-        dist = {"type": dist_type}
+        dist: dict[str, Any] = {"type": dist_type}
 
         # --- mode A cluster ---
         if dist_type == "cluster":
@@ -505,11 +511,12 @@ class MainWindow(QWidget):
     
 
     def collect_custom_script_wizard(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Script", "", "Python (*.py)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Script", str(SANDBOX_DIR), "Python (*.py)")
         if not file_path: return None
-        
+        file_path = Path(file_path)
+
         final_params = process_custom_script(
-            file_path = file_path,
+            file_path = str(file_path),
             registry = self.registry,
             ask_params_func = self.ask_celltype_params_gui,
             extract_params_func = extract_params,    
@@ -518,7 +525,7 @@ class MainWindow(QWidget):
         print(f"DEBUG: Detected Params -> {final_params}") # 👈 加这一
         if final_params:
             return {
-                "script_path": file_path,
+                "script_path": file_path.as_posix(),
                 "apply_params": final_params
             }
         return None
@@ -534,7 +541,10 @@ class MainWindow(QWidget):
 
         if not path:
             return
-
+        
+        if not self.registry:
+            return
+        
         try:
             rules_data = import_rules_from_csv(path)  
 
@@ -567,7 +577,7 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "Warning", "Please Load/Create a Project first!")
             return
         # “Pass in self so that ManageRulesWindow can access all the methods of the main window.”
-        from gui.ManageRuleWindow import ManageRulesWindow
+        from cc3d_builder.gui.ManageRuleWindow import ManageRulesWindow
         self.manage_win = ManageRulesWindow(self.registry, ask_cell_func=self.ask_celltype_params_gui, main_editor=self)
         self.manage_win.show()
 
@@ -578,32 +588,6 @@ class MainWindow(QWidget):
 
 
 
-if __name__ == "__main__":
-    from core.registry import SimulationRegistry 
-    from core.structure_manager import StructureManager
-
-    app = QApplication(sys.path)
-
-    # 1. 确定项目路径（这里假设你已经有 project_path，或者通过对话框获取）
-    # 如果你是启动时选择项目，逻辑应放在加载项目的方法里
-    project_path = "/Users/xiaoyue/src/bioinfo/project/Rules_project" 
-
-    # 2. 创建 StructureManager (SM)
-    # 它会读取 Rules_project.xml
-    sm = StructureManager(project_path)
-
-    # 3. 创建 Registry 并注入 SM
-    # 注意：你需要修改 registry.py 的 __init__ 以接收 structure_manager 参数
-    reg = SimulationRegistry(project_path, structure_manager=sm)
-
-    # 4. 执行加载（此时内部会自动调用 sm.get_xml_cell_types 进行同步）
-    reg.load()
-
-    # 5. 启动 GUI
-    window = MainWindow(registry=reg)
-    window.show()
-
-    sys.exit(app.exec_())
 
 
 

@@ -1,9 +1,12 @@
 # topology/contact_ratio.py
 import operator
 import sys
+from pathlib import Path
+from cc3d_builder.utils_extensions.paths import ROOT, SIMULATION_DIR
+from typing import TYPE_CHECKING
 
-sys.path.append("/Users/xiaoyue/src/bioinfo/project/Rules_project/simulation")
-from core.rule_engine import RuleEngine
+if TYPE_CHECKING:
+    from Rules_project.Simulation.core.rule_engine import RuleEngineSteppable
 
 OPS = {
     ">": operator.gt,
@@ -14,7 +17,7 @@ OPS = {
     "!=": operator.ne
 }
 
-def evaluate(cell, engine:'RuleEngine', params):
+def evaluate(cell, engine:'RuleEngineSteppable', params):
 
     target_type = params.get("target_type")
     threshold = params.get("threshold", 0.5)

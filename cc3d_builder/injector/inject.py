@@ -1,23 +1,30 @@
 # inject.py
 
-import os
 import sys
-from core.structure_manager import StructureManager
-from injector.steppable_injector import SteppableInjector
+from pathlib import Path
+
+CURRENT_FILE = Path(__file__).resolve()
+BUILDER_ROOT = CURRENT_FILE.parents[1]
+
+
+from cc3d_builder.core.structure_manager import StructureManager
+from cc3d_builder.injector.steppable_injector import SteppableInjector
+from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule
+
 
 def process_and_inject_rule(project_path, registry, rule):
 
-    sim_path = os.path.join(project_path, "Simulation")
-    if sim_path not in sys.path:
-        sys.path.append(sim_path)
-    
-    sm = StructureManager(project_path)
-    injector = SteppableInjector(project_path)
-    # ==========================================
-    # ==========================================
+    project_dir = Path(project_path).resolve()
+    sim_path = project_dir / "Simulation"
+
+    if str(sim_path) not in sys.path:
+        sys.path.append(str(sim_path))
+
+    sm = StructureManager(str(project_dir))
+    injector = SteppableInjector(str(project_dir))
+
     sm.ensure_from_rule(rule)
 
-    from utils_extensions.utils import extract_celltypes_from_rule
     all_involved_types = extract_celltypes_from_rule(rule)
     
     for ct in all_involved_types:
@@ -44,7 +51,6 @@ def process_and_inject_rule(project_path, registry, rule):
             target_volume=saved_params["targetVolume"],
             lambda_volume=saved_params["lambdaVolume"]
         )
-
 
     sm.save() 
     

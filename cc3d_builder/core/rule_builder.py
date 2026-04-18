@@ -1,8 +1,8 @@
 # rule_builder.py
 
-from core.rule_model import Rule
-from core.condition_builder import build_condition
-from core.model_builder import build_model
+from cc3d_builder.core.rule_model import Rule
+from cc3d_builder.cli.condition_builder import build_condition
+from cc3d_builder.core.model_builder import build_model
 
 
 def build_rule(behaviour, params):

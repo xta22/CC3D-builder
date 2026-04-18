@@ -2,16 +2,22 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
     QMessageBox, QHeaderView, QAbstractItemView, QPushButton, QInputDialog, 
     QGroupBox, QCheckBox, QSpinBox, QFormLayout, QScrollArea, QDialog, QLineEdit,
-    QDialogButtonBox
+    QDialogButtonBox, QScrollArea, QFileDialog
 )
 from PyQt5.QtCore import Qt
-from core.rule_builder import build_rule
-from gui.build_model_gui import build_model_gui
+from cc3d_builder.gui.main_editor import MainWindow
+from cc3d_builder.core.rule_builder import build_rule
+from cc3d_builder.gui.build_model_gui import build_model_gui
+from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule
 import importlib.util
-from utils_extensions.utils import process_custom_script, extract_params
+from cc3d_builder.utils_extensions.utils import process_custom_script, extract_params
+from typing import TYPE_CHECKING, Optional, List, Dict
+if TYPE_CHECKING:
+    from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+
 
 class ManageRulesWindow(QWidget):
-    def __init__(self, registry, ask_cell_func=None, main_editor = None):
+    def __init__(self, registry: 'SimulationRegistry', ask_cell_func=None, main_editor=None):
         super().__init__()
         self.registry = registry
         self.ask_cell_func = ask_cell_func
@@ -21,14 +27,14 @@ class ManageRulesWindow(QWidget):
         self.main_h_layout = QHBoxLayout(self)
         
         self.left_container = QWidget()
-        self.layout = QVBoxLayout(self.left_container) 
+        self.main_layout = QVBoxLayout(self.left_container)  # type: ignore
 
         self.main_h_layout.addWidget(self.left_container, stretch=4)
         
         self.setup_toolbar()
         self.table = QTableWidget()
         self.setup_table_config()
-        self.layout.addWidget(self.table)
+        self.main_layout.addWidget(self.table) # type: ignore
         
         self.cell_manager = CellInventoryWidget(self.registry, on_changed_callback=self.save_and_sync)
         self.main_h_layout.addWidget(self.cell_manager, stretch=1)
@@ -57,7 +63,7 @@ class ManageRulesWindow(QWidget):
         btn_layout.addWidget(self.btn_down)
         btn_layout.addWidget(self.btn_delete)
         btn_layout.addWidget(self.btn_back)
-        self.layout.addLayout(btn_layout)
+        self.main_layout.addLayout(btn_layout) # type: ignore
         
 
     def setup_table_config(self):
@@ -66,7 +72,7 @@ class ManageRulesWindow(QWidget):
         self.table.setHorizontalHeaderLabels(self.columns)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # type: ignore
         self.table.itemChanged.connect(self.on_item_changed)
         self.table.cellDoubleClicked.connect(self.on_cell_double_clicked)
 
@@ -121,10 +127,9 @@ class ManageRulesWindow(QWidget):
         
         if result:
             behaviour, params = result
-            from core.rule_builder import build_rule
+            from cc3d_builder.core.rule_builder import build_rule
             rule = build_rule(behaviour, params)
            
-            from utils_extensions.utils import extract_celltypes_from_rule
             new_types = extract_celltypes_from_rule(rule)
             
             if self.main_editor.confirm_rule(rule, new_types):
@@ -152,7 +157,10 @@ class ManageRulesWindow(QWidget):
         curr_row = self.table.currentRow()
         if curr_row == -1: return
         
-        rule_id = self.table.item(curr_row, 0).text()
+        item = self.table.item(curr_row, 0)
+        if item is None: return 
+        
+        rule_id = item.text()
         reply = QMessageBox.question(self, "Confirm", f"Delete Rule {rule_id}?", QMessageBox.Yes | QMessageBox.No)
         
         if reply == QMessageBox.Yes:
@@ -181,27 +189,37 @@ class ManageRulesWindow(QWidget):
             
         row = item.row()
         col = item.column()
-        rule_id = self.table.item(row, 0).text()
+        item = self.table.item(row, 0)
+        if item is None: return 
+        
+        rule_id = item.text()
         rule = self.registry.get_rule_by_id(rule_id)
         if not rule: return
         
         try:
             if col == 2: 
                 rule["target"] = item.text().strip()
-                from utils_extensions.utils import handle_new_rule_registration
+                from cc3d_builder.utils_extensions.utils import handle_new_rule_registration
                 handle_new_rule_registration(
                     self.registry, 
                     rule, 
-                    self.main_editor.ask_celltype_params_gui
+                    self.main_editor.ask_celltype_params_gui if self.main_editor else self.ask_cell_func
                 )
             elif col == 3: 
                 rule["frequency"] = int(item.text().strip())
             elif col == 6: 
                 rule["once"] = (item.checkState() == Qt.Checked)
                 
+            elif col == 7: # Custom Script Path
+                from pathlib import Path
+                raw_path = item.text().strip()
+                rule["custom_script"] = Path(raw_path).as_posix() if raw_path != "None" else "None"
+                
             self.registry.update_rule(rule_id, rule)
-            self.registry.save()
+            self.save_and_sync() 
             print(f"✅ Auto-saved inline edit for Rule {rule_id}")
+
+            # self.registry.save()
             
         except ValueError:
             QMessageBox.warning(self, "Error", "Frequency must be an integer!")
@@ -209,13 +227,22 @@ class ManageRulesWindow(QWidget):
 
     # ==========================================
     # ==========================================
+
     def on_cell_double_clicked(self, row, col):
-        rule_id = self.table.item(row, 0).text()
+        item = self.table.item(row, 0)
+        if item is None:
+            return
+
+        rule_id = item.text()
         rule = self.registry.get_rule_by_id(rule_id)
         if not rule: return
         beh = rule.get('behaviour', '').lower()
         updated = False
 
+        if not self.main_editor:
+            QMessageBox.warning(self, "Error", "Main Editor reference is missing!")
+            return
+        
         # --- col4 Condition ---
         if col == 4:
             new_cond = self.main_editor.build_condition_gui()
@@ -239,14 +266,26 @@ class ManageRulesWindow(QWidget):
             elif beh == "create":
                 new_data = self.main_editor.collect_create_params_wizard()
 
+            elif beh == "custom_script":
+                # Provide a dedicated parameter editor for custom scripts
+                script_path = rule.get("custom_script")
+                if script_path and script_path != "None":
+                    # scan the script and get the new key
+                    detected_keys = extract_params(script_path)
+                    saved_params = rule.get("apply_params", {})
+                    
+                    dialog = ParamEditorDialog(detected_keys, saved_params)
+                    if dialog.exec_() == QDialog.Accepted:
+                        new_data = dialog.get_final_params()
+                        rule["apply_params"] = new_data
+                        updated = True
+
             if new_data:
                 self._update_rule_content(rule, new_data)
                 updated = True
 
         if updated:
             self.registry.update_rule(rule_id, rule) 
-
-            from utils_extensions.utils import extract_celltypes_from_rule
             mentioned_types = extract_celltypes_from_rule(rule)
 
             for ct in mentioned_types:
@@ -331,34 +370,72 @@ class ManageRulesWindow(QWidget):
         from gui.build_condition_gui import build_condition_gui as real_builder
         return real_builder(self)
     
+    def get_file_path(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Python Script", "", "Python Files (*.py)")
+        return file_path
+    
+    def on_import_script(self):
+        curr_row = self.table.currentRow()
+        if curr_row == -1:
+            QMessageBox.warning(self, "Warning", "Please select a rule first!")
+            return
+        
+        item = rule_id = self.table.item(curr_row, 0)
+        if item:
+            rule_id = item.text()
+            rule = self.registry.get_rule_by_id(rule_id)
+
+        if not rule: return
+
+        file_path = self.get_file_path() 
+        if not file_path: return
+
+        if self.main_editor:
+            final_params = process_custom_script(
+                file_path = file_path,
+                registry = self.registry,
+                ask_params_func = self.main_editor.ask_celltype_params_gui,
+                extract_params_func = extract_params,
+                existing_params =rule.get("apply_params", {}) 
+            )
+            if final_params:
+                rule["apply_params"] = final_params
+                rule["custom_script"] = file_path
+                
+                self.registry.update_rule(rule_id, rule)
+                self.save_and_sync()
+                self.refresh_table()
 
 class CellInventoryWidget(QGroupBox):
-    def __init__(self, registry, on_changed_callback=None):
+    def __init__(self, registry: 'SimulationRegistry', on_changed_callback=None, ask_cell_func=None, main_editor = None):
         super().__init__("🧬 Cell Initialization Manager")
         self.registry = registry
         self.on_changed_callback = on_changed_callback
-        self.layout = QVBoxLayout(self)
-        
-        self.scroll = QScrollArea()
+        self.main_layout = QVBoxLayout(self)
+        self.main_editor = main_editor
+        self.scroll: QScrollArea = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.container = QWidget()
         self.form_layout = QFormLayout(self.container)
         self.scroll.setWidget(self.container)
-        self.layout.addWidget(self.scroll)
+        self.main_layout.addWidget(self.scroll)
         
         self.refresh_list()
 
     def refresh_list(self):
         while self.form_layout.count() > 0:
             item = self.form_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+            if item: 
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
         # for i in reversed(range(self.form_layout.count())): 
         #    self.form_layout.itemAt(i).widget().setParent(None)
 
         for name, params in self.registry.celltype_params.items():
-            row_layout = QHBoxLayout()
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
             
             cb = QCheckBox("Init")
             cb.setChecked(params.get("should_initialize", True))
@@ -372,7 +449,7 @@ class CellInventoryWidget(QGroupBox):
             row_layout.addWidget(cb)
             row_layout.addWidget(sb)
             
-            self.form_layout.addRow(f"<b>{name}</b>:", row_layout)
+            self.form_layout.addRow(f"<b>{name}</b>:", row_widget)
 
     def _update_init(self, name, state):
         self.registry.celltype_params[name]["should_initialize"] = (state == Qt.Checked)
@@ -387,21 +464,6 @@ class CellInventoryWidget(QGroupBox):
         if self.on_changed_callback:
             self.on_changed_callback() 
 
-    def on_import_script(self):
-        file_path = self.get_file_path() 
-        if not file_path: return
-        
-        final_params = process_custom_script(
-            file_path = file_path,
-            registry = self.registry,
-            ask_params_func = self.main_editor.ask_celltype_params_gui,
-            extract_params_func = extract_params,
-            existing_params = self.current_rule.get("apply_params")
-        )
-        if final_params:
-            self.current_rule.apply_params = final_params
-            self.current_rule.script_path = file_path
-            self.refresh_table()
 
 #  for custom scripts parameter modification in MainRuleWindow 
 class ParamEditorDialog(QDialog):
@@ -417,8 +479,7 @@ class ParamEditorDialog(QDialog):
         self.init_ui()
         # UI layout:
         # 1. Iterate over detected_keys: automatically create input fields, and populate them with values if they exist in saved_params.
-        # 2. Keep an "Add Custom Parameter" button at the bottom: used to manually add keys that were missed by the script.
-                
+        # 2. Keep an "Add Custom Parameter" button at the bottom: used to manually add keys that were missed by the script.       
 
     def init_ui(self):
         self.main_layout = QVBoxLayout(self)

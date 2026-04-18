@@ -1,16 +1,15 @@
 import operator
 import sys
-
-sys.path.append("/Users/xiaoyue/src/bioinfo/project/Rules_project/simulation")
-
+from pathlib import Path
+from cc3d_builder.utils_extensions.paths import ROOT, SIMULATION_DIR
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.rule_engine import RuleEngine
+    from Rules_project.Simulation.core.rule_engine import RuleEngineSteppable
 
 OPS = {">": operator.gt, "<": operator.lt, ">=": operator.ge, "<=": operator.le}
 
-def evaluate(cell, engine: 'RuleEngine', params: dict):
+def evaluate(cell, engine: 'RuleEngineSteppable', params: dict):
 
     threshold = params.get("threshold", 1.0)
     compare_func = OPS.get(params.get("operator", ">"), operator.gt)

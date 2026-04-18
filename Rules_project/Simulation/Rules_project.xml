@@ -12,7 +12,6 @@
     <Plugin Name="CellType">
         <CellType TypeId="0" TypeName="Medium"></CellType>
         <CellType TypeId="1" TypeName="Cell"></CellType>
-        <CellType TypeName="CellA" TypeId="2"></CellType>
     </Plugin>
     <Plugin Name="CenterOfMass">
    </Plugin>
@@ -25,9 +24,6 @@
         <Energy Type1="Medium" Type2="Cell">10.0</Energy>
         <Energy Type1="Cell" Type2="Cell">5.0</Energy>
         <NeighborOrder>4</NeighborOrder>
-        <Energy Type1="CellA" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellA">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellA">10.0</Energy>
     </Plugin>
     <Plugin Name="Chemotaxis">
         <ChemicalField Name="Oxygen">
@@ -65,13 +61,6 @@
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>Cell</Types>
-        </Region>
-        <Region>
-            <BoxMin x="222" y="113" z="0"></BoxMin>
-            <BoxMax x="243" y="134" z="1"></BoxMax>
-            <Gap>0</Gap>
-            <Width>5</Width>
-            <Types>CellA</Types>
         </Region>
     </Steppable>
 </CompuCell3D>

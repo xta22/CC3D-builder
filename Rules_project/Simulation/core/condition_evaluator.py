@@ -1,65 +1,7 @@
 import json
 import random
-import os
+from pathlib import Path
 import importlib.util
-
-'''
-def evaluate_single_condition(cond, cell, engine):
-    # 1. Unified extraction of types and parameter pools
-    cond_type = cond.get("condition_type", cond.get("type"))
-    params = cond.get("params", cond) 
-    
-    if cond_type == "TRUE":
-        return True
-
-    if cond_type == "threshold":
-        regulator = params.get("regulator")
-        operator = params.get("operator")
-        value = params.get("value")
-        reg_type = params.get("regulator_type", "field")
-
-        if reg_type == "field":
-            if cell is None:
-                print(f"[Warning] 'field' threshold requires a cell instance. Skipping.")
-                return False
-            
-            field = getattr(engine.field, regulator, None)
-            if field is None:
-                return False
-            
-            A = field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
-
-        elif reg_type == "celltype":
-            reg_id = getattr(engine, regulator.upper(), None)
-            if reg_id is None: return False
-            A = len(engine.cell_list_by_type(reg_id))
-        else:
-            return False
-
-        ops = {
-            ">": lambda x, y: x > y,
-            "<": lambda x, y: x < y,
-            ">=": lambda x, y: x >= y,
-            "<=": lambda x, y: x <= y,
-            "==": lambda x, y: x == y
-        }
-        return ops.get(operator, lambda x, y: False)(A, value)
-
-    elif cond_type in ["time_window", "TimeWindow"]:
-        start = params.get("start_mcs", params.get("start", 0))
-        end = params.get("end_mcs", params.get("end", float("inf")))
-        
-        res = start <= engine.current_mcs < end
-        # print(f"MCS {engine.current_mcs} in [{start}, {end}]? {res}")
-        return res
-
-    elif cond_type == "probability":
-        p = params.get("p", 0)
-        return random.random() < p
-
-    return False
-
-'''
 
 def evaluate_single_condition(cond, cell, engine):
     cond_type = cond.get("condition_type", cond.get("type"))
@@ -143,14 +85,25 @@ def evaluate_single_condition(cond, cell, engine):
 
     
     elif cond_type == "Custom":
-        script_path = cond.get("script_path")  
-        if not script_path or not os.path.exists(script_path):
+        script_path_str = cond.get("script_path")
+        if not script_path_str:
+            print("[Custom Error] Script path missing")
+            return False
+
+        script_path = Path(script_path_str)
+
+        if not script_path.exists():
             print(f"[Custom Error] Script not found: {script_path}")
             return False
         
         try:
             spec = importlib.util.spec_from_file_location("custom_mod", script_path)
+            if spec is None or spec.loader is None:
+                print(f"[Custom Error] Cannot load module from {script_path}")
+                return False
+
             module = importlib.util.module_from_spec(spec)
+
             spec.loader.exec_module(module)
 
             return module.validate(cell, engine, p)
@@ -159,7 +112,6 @@ def evaluate_single_condition(cond, cell, engine):
             return False
         
     return False
-
 
 def evaluate_condition(block, cell, engine):
     full_type = block.get("condition_type", "")
