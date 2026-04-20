@@ -1,26 +1,105 @@
 # cc3d_builder/utils_extensions/utils.py
 from cc3d_builder.utils_extensions.rule_parsing import (
     extract_celltypes_from_rule,
+    extract_fields_from_rule,
     extract_params,
 )
+from PyQt5.QtWidgets import (
+    QInputDialog, QDialog, QApplication
+)
+import sys
 
-def ask_celltype_params(name):
-    print(f"\n[New CellType Detected] {name}")
-    target = float(input("targetVolume: "))
-    lam = float(input("lambdaVolume: "))
-    return {"targetVolume": target, "lambdaVolume": lam}
+def ask_params_cli(mode, name):
+    """ CLI entry """
+    if mode == "celltype":
+        v = float(input(f"\n[New Type: {name}] Target Volume [50]: ") or 50)
+        l = float(input(f"[New Type: {name}] Lambda Volume [10]: ") or 10)
+        return {"vol": v, "lamb": l}
+    elif mode == "field":
+        print("Launching Diffusion Equation Solvers Now...")
+        from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
+        app = QApplication.instance()
+        
+        if not app:
+            app = QApplication(sys.argv) # ??? 
 
+        available_cells = [] # compatibility ??
+        dialog = FieldSetupDialog(name, available_cells)
+        
+        # 3. 运行对话框
+        if dialog.exec_() == QDialog.Accepted:
+            result = dialog.get_data()
+            print(f"✅ Configuration received from GUI.")
+            return result
+        else:
+            print(f"⚠️ Dialog cancelled. Using defaults.")
+            return {"diff": 0.1, "dec": 0.001}
 
-def handle_new_rule_registration(registry, rule, ask_params_func):
+    return None
+
+def ask_params_gui(self, mode, name):
+    """
+    Generic parameter retriever: supports both CellType and Field
+    """
+    if mode == "celltype":
+        target, ok1 = QInputDialog.getDouble(
+            self, f"New CellType: {name}", "targetVolume:", 50
+        )
+        lam, ok2 = QInputDialog.getDouble(
+            self, f"New CellType: {name}", "lambdaVolume:", 10
+        )
+        if ok1 and ok2:
+            return {"vol": target, "lamb": lam}
+            
+
+    elif mode == "field":
+        available_cells = list(self.registry.celltype_params.keys())
+        from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
+        dialog = FieldSetupDialog(name, available_cells, self)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            field_params = dialog.get_data()
+            
+            # 这里处理你之前提到的“自动添加 Secretion Rule”逻辑
+            if field_params.pop("ControlSecretionPython", False):
+                secrete_rule = {
+                    "id": f"auto_secrete_{name}",
+                    "behaviour": "secrete",
+                    "target": "global",
+                    "apply": {"field": name, "rate": 0.1}
+                }
+                self.registry.add_rule(secrete_rule)
+                print(f"✅ Auto-generated secretion rule for {name}")
+                
+            # 返回给 handle_new_rule_registration 
+            # 确保包含 'diff' 和 'dec' 键值
+            return field_params
+    return None
+
+def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
+    '''
+    input_handler: A function to retrieve parameters for new types or new fields
+    GUI: self.ask_field_params_gui
+    CLI: self.ask_field_params_cli
+    '''
     new_types = extract_celltypes_from_rule(rule)
     for ct in new_types:
         if ct not in registry.celltype_params:
-            params_ct = ask_params_func(ct)
+            params_ct = input_handler("celltype", ct)
             if params_ct:
-                registry.add_celltype_params(
-                    ct, params_ct["targetVolume"], params_ct["lambdaVolume"]
-                )
+                    injector.ensure_volume_start_code(ct, params_ct['vol'], params_ct['lamb'])
+                    registry.add_celltype_params(ct, params_ct['vol'], params_ct['lamb'])
 
+    new_fields = extract_fields_from_rule(rule)
+    for f_name in new_fields:
+        if f_name not in registry.fields:
+            if sm.ensure_field(f_name):
+                params = input_handler("field", f_name)
+                if params:
+                    sm.update_field_params(f_name, params['diff'], params['dec'])
+                    injector.ensure_field_start_code(f_name)
+                    registry.add_field_params(f_name)
+                    
     registry.add_rule(rule)
 
     from cc3d_builder.injector.inject import process_and_inject_rule

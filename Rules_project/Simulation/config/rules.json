@@ -1,2 +1,142 @@
 {
+  "rules": [
+    {
+      "id": "1",
+      "target": "CellA",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 0.0,
+              "field_name": "Oxygen"
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Oxygen",
+            "parameters": {
+              "y_max": 1.0,
+              "y_min": 0.0,
+              "K": 0.5,
+              "n": 2.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "1",
+      "target": "CellE",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "field_name": "Oxygen",
+              "operator": ">",
+              "threshold": 2.0
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Oxygen",
+            "parameters": {
+              "y_max": 2.0,
+              "y_min": 1.0,
+              "K": 1.0,
+              "n": 1.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "1",
+      "target": "CellE",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "field_name": "Oxygen",
+              "operator": ">",
+              "threshold": 2.0
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Oxygen",
+            "parameters": {
+              "y_max": 2.0,
+              "y_min": 1.0,
+              "K": 1.0,
+              "n": 1.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "1",
+      "target": "CellE",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "field_name": "Oxygen",
+              "operator": ">",
+              "threshold": 2.0
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Oxygen",
+            "parameters": {
+              "y_max": 2.0,
+              "y_min": 1.0,
+              "K": 1.0,
+              "n": 1.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    }
+  ],
+  "celltype_params": {
+    "Cell": {
+      "should_initialize": true,
+      "initial_count": 13,
+      "targetVolume": 50.0,
+      "lambdaVolume": 2.0
+    },
+    "CellA": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0,
+      "should_initialize": true,
+      "initial_count": 15
+    },
+    "CellE": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 5.0
+    }
+  }
 }

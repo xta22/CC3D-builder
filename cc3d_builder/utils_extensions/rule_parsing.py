@@ -2,6 +2,9 @@
 import re
 
 def extract_celltypes_from_rule(rule):
+    """
+    read only -- check what cell types are mentioned in json
+    """
     types = set()
 
     if rule.get("target"):
@@ -41,3 +44,22 @@ def extract_params(content):
     unique_params = sorted(list(set(m for m in matches if m != 'get')))
     print(f">>> DEBUG: Regex extracted: {unique_params}")
     return unique_params
+
+
+def extract_fields_from_rule(rule):
+    """
+    read only -- Search for field_name in rule dict
+    """
+    found_fields = set()
+    apply_data = rule.get("apply", {})
+    params = apply_data.get("parameters", {})
+    # single field 
+    if "release_field" in params and params["release_field"] != "None":
+        found_fields.add(params["release_field"])
+        
+    # multiple-fields
+    for f_info in params.get("fields", []):
+        if "field_name" in f_info:
+            found_fields.add(f_info["field_name"])
+            
+    return found_fields

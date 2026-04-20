@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QListWidget, QPushButton,
+    QWidget, QVBoxLayout, QListWidget, QPushButton, QDialog,
     QInputDialog, QApplication, QMessageBox, QFileDialog
 )
 import sys
@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.core.csv_importer import import_rules_from_csv
-from cc3d_builder.utils_extensions.utils import process_custom_script, extract_params, handle_new_rule_registration
-from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule
+from cc3d_builder.utils_extensions.utils import  handle_new_rule_registration, ask_params_gui, process_custom_script, extract_params
+from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule 
 from cc3d_builder.core.structure_manager import StructureManager
 from cc3d_builder.injector.steppable_injector import SteppableInjector
 from cc3d_builder.injector.inject import process_and_inject_rule
@@ -16,6 +16,7 @@ from cc3d_builder.utils_extensions.paths import ROOT, SANDBOX_DIR
 from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
 import re
 from typing import Any
+from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2] 
 
@@ -83,31 +84,6 @@ class MainWindow(QWidget):
 
         ids = [int(r.get("id", 0)) for r in self.registry.rules if r.get("id", "").isdigit()]
         return str(max(ids) + 1 if ids else 1)
-
-    def ask_celltype_params_gui(self, name):
-
-        target, ok = QInputDialog.getDouble(
-            self,
-            f"New CellType: {name}",
-            "targetVolume:",
-            50
-        )
-        if not ok:
-            return None
-
-        lam, ok = QInputDialog.getDouble(
-            self,
-            f"New CellType: {name}",
-            "lambdaVolume:",
-            10
-        )
-        if not ok:
-            return None
-
-        return {
-            "targetVolume": target,
-            "lambdaVolume": lam
-        }
     
     def confirm_rule(self, rule, new_types):
         """show rules for users to confirm"""
@@ -256,16 +232,52 @@ class MainWindow(QWidget):
                 return
             self.registry.rules = [r for r in self.registry.rules if r["id"] != params["id"]]
 
+        new_fields = extract_fields_from_rule(rule)
+        for field_name in new_fields:
+            if field_name not in self.registry.field_params:
+                
+                # 拿到当前已经注册的细胞类型列表，传给弹窗，供趋化性下拉框使用
+                available_cells = list(self.registry.celltype_params.keys())
+                
+                # 呼叫我们的终极弹窗！
+                dialog = FieldSetupDialog(field_name, available_cells, self)
+                
+                if dialog.exec_() == QDialog.Accepted:
+                    # 拿到组装好的终极字典
+                    field_params = dialog.get_data()
+                    
+                    # 是否需要自动添加 Secretion Rule?
+                    if field_params.pop("ControlSecretionPython", False):
+                        # 自动生成联动规则
+                        secrete_rule = {
+                            "id": f"auto_secrete_{field_name}",
+                            "behaviour": "secrete",
+                            "target": "global",
+                            "apply": {"field": field_name, "rate": 0.1}
+                        }
+                        self.registry.add_rule(secrete_rule)
+                        print(f"✅ Auto-generated secretion rule for {field_name}")
+
+                    # 写入 Registry (这样底层 ensure_xml 就能完美读取了)
+                    self.registry.add_field_params(field_name, field_params)
+                    
+                else:
+                    print(f"⚠️ User canceled field setup for {field_name}")
+                    return # 如果必须要填物理参数而用户取消了，那就打断注入过程
+        
         try:
             handle_new_rule_registration(
                 self.registry, 
                 rule, 
-                self.ask_celltype_params_gui 
+                self.ask_params_gui,
+                self.sm,
+                self.injector 
             )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Registration failed:\n{str(e)}")
             return
     
+        
         self.refresh_list()
         QMessageBox.information(
             self, "Success",
@@ -518,7 +530,7 @@ class MainWindow(QWidget):
         final_params = process_custom_script(
             file_path = str(file_path),
             registry = self.registry,
-            ask_params_func = self.ask_celltype_params_gui,
+            ask_params_func = self.ask_params_gui,
             extract_params_func = extract_params,    
             existing_params = None
         )

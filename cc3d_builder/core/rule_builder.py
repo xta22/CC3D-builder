@@ -56,6 +56,44 @@ def build_rule(behaviour, params):
             "distribution": params["distribution"]
         }
 
+    # =========================
+    # APOPTOSIS 
+    # =========================
+    elif behaviour == "apoptosis":
+        # continue shrinking until disappear
+        apply_block = {
+            "model": "shrink_model",
+            "parameters": {
+                "shrink_rate": params.get("shrink_rate", 0.95), # targetvolume * 0.95 / 
+                "terminal_volume": 0.0,                        
+                "color_change": "grey"                        
+            }
+        }
+
+    # =========================
+    # NECROSIS 
+    # =========================
+    elif behaviour == "necrosis":
+        # continue swelling until breaking, releasing substrate.
+        raw_fields = params.get("fields", []) 
+        
+        # for compatibility 
+        if not raw_fields and params.get("release_field") and params.get("release_field") != "None":
+            raw_fields = [{
+                "field_name": params.get("release_field"),
+                "amount": params.get("release_amount", 50.0)
+            }]
+
+        apply_block = {
+            "model": "swell_model",
+            "parameters": {
+                "swell_rate": params.get("swell_rate", 1.05),  # targetvolume * 1.05 
+                "max_target_volume": params.get("max_target_volume", 150.0), 
+                "release_field": params.get("release_field", "None"),        
+                "release_amount": params.get("release_amount", 50.0)      
+            }
+        }
+
     elif behaviour == "custom_script":
         # we put parameters from UI into apply block
         # so Steppable could retrieve value from params
@@ -66,6 +104,8 @@ def build_rule(behaviour, params):
     else:
         raise Exception("Unsupported behaviour")
 
+    ###############################################
+    ###############################################
     rule = Rule(
         id=rule_id,
         target=target,

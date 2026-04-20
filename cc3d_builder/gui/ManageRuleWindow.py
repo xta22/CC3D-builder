@@ -17,9 +17,11 @@ if TYPE_CHECKING:
 
 
 class ManageRulesWindow(QWidget):
-    def __init__(self, registry: 'SimulationRegistry', ask_cell_func=None, main_editor=None):
+    def __init__(self, registry: 'SimulationRegistry', sm, injector, ask_cell_func=None, main_editor=None):
         super().__init__()
         self.registry = registry
+        self.sm = sm
+        self.injector = injector
         self.ask_cell_func = ask_cell_func
         self.main_editor = main_editor
         self.resize(1600, 800) 
@@ -130,29 +132,22 @@ class ManageRulesWindow(QWidget):
             from cc3d_builder.core.rule_builder import build_rule
             rule = build_rule(behaviour, params)
            
-            new_types = extract_celltypes_from_rule(rule)
+            from cc3d_builder.utils_extensions.utils import handle_new_rule_registration
+            try:
+                handle_new_rule_registration(
+                    registry=self.registry,
+                    rule=rule,
+                    input_handler=self.ask_params_gui,
+                    sm=self.sm,
+                    injector=self.injector
+                )
+                self.refresh_table()
+                self.save_and_sync()
+                QMessageBox.information(self, "Success", f"Rule {rule['id']} added successfully!")
+            except Exception as e:
+                print(f"Registration/Injection failed: {e}") 
+                QMessageBox.warning(self, "Error", f"Failed to register rule: {e}")
             
-            if self.main_editor.confirm_rule(rule, new_types):
-                for ct in new_types:
-                    if ct not in self.registry.celltype_params:
-                        params_ct = self.main_editor.ask_celltype_params_gui(ct)
-                        if params_ct:
-                            self.registry.add_celltype_params(
-                                ct, params_ct["targetVolume"], params_ct["lambdaVolume"]
-                            )
-                        else:
-                            return 
-                from injector.inject import process_and_inject_rule
-                try:
-                    self.registry.add_rule(rule)
-                    process_and_inject_rule(self.registry.project_path, self.registry, rule)
-                    
-                    self.refresh_table()
-                    self.save_and_sync()
-                except Exception as e:
-                    print(f"Injection failed: {e}") 
-                    QMessageBox.warning(self, "Injection Error", f"Rules are saved but fail to inject  {e}")
-
     def handle_delete(self):
         curr_row = self.table.currentRow()
         if curr_row == -1: return
@@ -189,22 +184,24 @@ class ManageRulesWindow(QWidget):
             
         row = item.row()
         col = item.column()
-        item = self.table.item(row, 0)
-        if item is None: return 
+        item_id = self.table.item(row, 0)
+        if item_id is None: return 
         
-        rule_id = item.text()
+        rule_id = item_id.text()
         rule = self.registry.get_rule_by_id(rule_id)
         if not rule: return
-        
+
         try:
             if col == 2: 
                 rule["target"] = item.text().strip()
                 from cc3d_builder.utils_extensions.utils import handle_new_rule_registration
                 handle_new_rule_registration(
-                    self.registry, 
-                    rule, 
-                    self.main_editor.ask_celltype_params_gui if self.main_editor else self.ask_cell_func
-                )
+                registry=self.registry,
+                rule=rule,
+                input_handler=self.ask_params_gui,
+                sm = self.sm,
+                injector = self.injector,
+            )
             elif col == 3: 
                 rule["frequency"] = int(item.text().strip())
             elif col == 6: 

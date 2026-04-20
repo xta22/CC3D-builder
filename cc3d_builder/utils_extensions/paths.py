@@ -1,3 +1,4 @@
+# paths.py
 from pathlib import Path
 import sys
 

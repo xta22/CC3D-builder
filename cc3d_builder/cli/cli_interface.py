@@ -1,9 +1,10 @@
 # cli_interface.py
 
 from cc3d_builder.core.rule_builder import build_rule
+from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+from cc3d_builder.utils_extensions.utils import handle_new_rule_registration, ask_params_cli
 
-
-def cli_add_rule():
+def cli_add_rule(registry, sm, injector):
 
     params = {}
 
@@ -12,7 +13,7 @@ def cli_add_rule():
     # =========================
 
     params["id"] = input("Rule ID: ").strip()
-
+    print("=================================")
     target = input("Target cell type (or None): ").strip()
     params["target"] = None if target.lower() == "none" else target
 
@@ -264,6 +265,23 @@ def cli_add_rule():
             raise Exception("Invalid distribution")
 
     # ============================================================
+    # Cell Death
+    # ============================================================
+    if behaviour == "apoptosis":
+        params["shrink_rate"] = float(input("Shrink rate (0-1, default 0.95): ") or 0.95)
+        
+    elif behaviour == "necrosis":
+        params["swell_rate"] = float(input("Swell rate (>1, default 1.05): ") or 1.05)
+        params["max_target_volume"] = float(input("Max volume before burst [150]: ") or 150)
+        
+        # allow users to write in more than one field
+        fields = []
+        while True:
+            f_name = input("Release field name (or enter to skip): ").strip()
+            if not f_name: break
+            amount = float(input(f"Release amount for {f_name} [50]: ") or 50)
+            fields.append({"field_name": f_name, "amount": amount})
+        params["fields"] = fields
 
     params["once"] = input("Trigger once? (y/n): ").strip().lower() == "y"
     params["debug"] = input("Debug mode? (y/n): ").strip().lower() == "y"
@@ -274,16 +292,6 @@ def cli_add_rule():
 
     rule = build_rule(behaviour, params)
 
+    handle_new_rule_registration(registry, rule, ask_params_cli, sm, injector)
+    
     return rule
-
-def ask_celltype_params(name):
-
-    print(f"\n[New CellType Detected] {name}")
-
-    target = float(input("targetVolume: "))
-    lam = float(input("lambdaVolume: "))
-
-    return {
-        "targetVolume": target,
-        "lambdaVolume": lam
-    }

@@ -96,7 +96,7 @@ class StructureManager:
     # ============================================================
 
     def ensure_volume_plugin_empty(self):
-        
+
         # current volume plugin
         plugin = self.root.find(".//Plugin[@Name='Volume']")
         
@@ -117,6 +117,9 @@ class StructureManager:
     # ============================================================
 
     def ensure_celltype(self, name):
+        ''' 
+        if the "NewCell" isnt in XML then assign an ID for it
+        '''
         if not name:
             return False
 
@@ -148,6 +151,44 @@ class StructureManager:
         self._ensure_contact(name)
         self._ensure_initializer(name)
 
+        return True
+    
+    # ============================================================
+    # FIELD
+    # ============================================================
+
+    def ensure_field(self, field_name, diff_const=0.1, decay_const=0.001):
+        """
+        confirm that field exists in xml
+        """
+        if not field_name or field_name == "None":
+            return False
+
+        # 1. Check or Create DiffusionSolver in "Steppable" Plugin in XML
+        solver = self.root.find(".//Steppable[@Type='DiffusionSolverFE']")
+        if solver is None:
+            # solver framework
+            return False
+
+        # 2. check whether field exists
+        for df in solver.findall("DiffusionField"):
+            if df.attrib.get("Name") == field_name:
+                return False
+
+        # 3. create new field node
+        new_field = ET.SubElement(solver, "DiffusionField")
+        new_field.set("Name", field_name)
+        
+        diff_data = ET.SubElement(new_field, "DiffusionData")
+        ET.SubElement(diff_data, "FieldName").text = field_name
+        ET.SubElement(diff_data, "DiffusionConstant").text = str(diff_const)
+        ET.SubElement(diff_data, "DecayConstant").text = str(decay_const)
+
+        print(f"[StructureManager] Added DiffusionField: {field_name}")
+        
+        # 4. automatically add Chemotaxis placeholders for all CellTypes
+        self._ensure_field_chemotaxis_placeholders(field_name)
+        
         return True
 
     # ============================================================
@@ -361,3 +402,206 @@ class StructureManager:
             if (name := ct.attrib.get("TypeName")) and name.lower() != "medium"
         ]
         return names
+
+    def _ensure_field_chemotaxis_placeholders(self, field_name):
+        """
+        “When a new Field is created, add Chemotaxis placeholders for all existing CellTypes in the XML.”
+        """
+        # 1. check or create Chemotaxis plugin
+        chemotaxis_plugin = self.root.find(".//Plugin[@Name='Chemotaxis']")
+        if chemotaxis_plugin is None:
+            chemotaxis_plugin = ET.SubElement(self.root, "Plugin")
+            chemotaxis_plugin.set("Name", "Chemotaxis")
+
+        # 2. get all CellType defined in XML
+        cell_type_plugin = self.root.find(".//Plugin[@Name='CellType']")
+        if cell_type_plugin is None:
+            print("No Celltypes has been detected.")
+            return # theoretically should not happen
+
+        all_types = [ct.attrib['TypeName'] for ct in cell_type_plugin.findall("CellType") 
+                    if ct.attrib['TypeName'] != 'Medium']
+
+        # 3. check if the field has its Diffusion Solver
+        for t_name in all_types:
+            
+            found = False
+            for cf_node in chemotaxis_plugin.findall("ChemicalField"):
+                if cf_node.attrib.get("Name") == field_name:
+                    # celltype configuration
+                    for c_type in cf_node.findall("ChemotaxisByType"):
+                        if c_type.attrib.get("Type") == t_name:
+                            found = True
+                            break
+            
+            if not found:
+                cf_node = None
+                for node in chemotaxis_plugin.findall("ChemicalField"):
+                    if node.attrib.get("Name") == field_name:
+                        cf_node = node
+                        break
+                
+                if cf_node is None:
+                    cf_node = ET.SubElement(chemotaxis_plugin, "ChemicalField")
+                    cf_node.set("Name", field_name)
+                
+                # chemotaxis parameters
+                chemo_by_type = ET.SubElement(cf_node, "ChemotaxisByType")
+                chemo_by_type.set("Lambda", "0.0")
+                chemo_by_type.set("Type", t_name)
+                
+                print(f"[StructureManager] Added Chemotaxis placeholder for {t_name} on field {field_name}")
+
+    def migrate_field_data(self):
+        """
+        Extract DiffusionSolverFE and Chemotaxis Configuration from original XML
+        {
+            "Oxygen": {
+                "GlobalDiffusionConstant": 0.9,
+                "GlobalDecayConstant": 1e-05,
+                "InitialConcentrationExpression": "x/100",
+                "Chemotaxis": {"Cell": 1000.0}
+            }
+        }
+        """
+        fields_data = {}
+
+        # ==========================================
+        # 1. 提取 DiffusionSolverFE 参数
+        # ==========================================
+        diffusion_solver = self.root.find('.//Steppable[@Type="DiffusionSolverFE"]')
+        if diffusion_solver is not None:
+            for d_field in diffusion_solver.findall('DiffusionField'):
+                field_name = d_field.get('Name')
+                diff_data = d_field.find('DiffusionData')
+                
+                if field_name not in fields_data:
+                    fields_data[field_name] = {}
+                if diff_data is not None:
+        
+                    # 提取核心参数
+                    g_diff = diff_data.findtext('GlobalDiffusionConstant')
+                    g_decay = diff_data.findtext('GlobalDecayConstant')
+                    init_expr = diff_data.findtext('InitialConcentrationExpression')
+
+                    if g_diff: fields_data[field_name]['GlobalDiffusionConstant'] = float(g_diff)
+                    if g_decay: fields_data[field_name]['GlobalDecayConstant'] = float(g_decay)
+                    if init_expr: fields_data[field_name]['InitialConcentrationExpression'] = init_expr
+                    
+                # ===You can also add logic here to parse BoundaryConditions and CellType-specific coefficients.
+
+        # ==========================================
+        # 2. Extract chemo parameters and merge
+        # ==========================================
+        chemotaxis_plugin = self.root.find('.//Plugin[@Name="Chemotaxis"]')
+        if chemotaxis_plugin is not None:
+            for c_field in chemotaxis_plugin.findall('ChemicalField'):
+                field_name = c_field.get('Name')
+                
+                if field_name not in fields_data:
+                    fields_data[field_name] = {}
+                
+                if 'Chemotaxis' not in fields_data[field_name]:
+                    fields_data[field_name]['Chemotaxis'] = {}
+
+                for c_type in c_field.findall('ChemotaxisByType'):
+                    cell_type = c_type.get('Type')
+                    lambda_val = c_type.get('Lambda')
+                    if cell_type and lambda_val:
+                        fields_data[field_name]['Chemotaxis'][cell_type] = float(lambda_val)
+
+        # ==========================================
+        # 3. (可选) 提取 Secretion 参数并合并
+        # ==========================================
+        secretion_plugin = self.root.find('.//Plugin[@Name="Secretion"]')
+        # ... 仿照上面的逻辑，如果 XML 里有 Secretion 标签，也合并到 fields_data 中 ...
+
+        return fields_data
+    
+    def clear_field_and_related_plugins(self):
+        """
+        清空 XML 中的 DiffusionSolverFE、Chemotaxis 和 Secretion 节点。
+        就像在画布上重新作画前，先把这几块区域擦干净。
+        """
+        cc3d_root = self.root  # 假设 self.root 是 <CompuCell3D> 根节点
+
+        # 1. 揪出并删除所有的 DiffusionSolverFE 节点
+        for solver in cc3d_root.findall('.//Steppable[@Type="DiffusionSolverFE"]'):
+            cc3d_root.remove(solver)
+
+        # 2. 揪出并删除所有的 Chemotaxis 插件
+        for plugin in cc3d_root.findall('.//Plugin[@Name="Chemotaxis"]'):
+            cc3d_root.remove(plugin)
+
+        # 3. 揪出并删除所有的 Secretion 插件 (如果有的话)
+        for plugin in cc3d_root.findall('.//Plugin[@Name="Secretion"]'):
+            cc3d_root.remove(plugin)
+            
+        # 注意：这里我们不需要调用 self.save()，
+        # 因为清空只是中间步骤，等后续重新生成完 XML 节点后，再统一 save。
+
+    def ensure_field_xml_from_registry(self, field_params):
+        """
+        根据 Registry 中的 field_params 字典，从头生成纯净的 XML 节点。
+        """
+        if not field_params:
+            return  # 如果没有任何场数据，直接返回
+
+        # ==========================================
+        # 1. 重建 DiffusionSolverFE 节点
+        # ==========================================
+        # 创建 <Steppable Type="DiffusionSolverFE">
+        solver_node = ET.SubElement(self.root, 'Steppable', attrib={'Type': 'DiffusionSolverFE'})
+        
+        has_chemotaxis = False
+
+        for field_name, params in field_params.items():
+            # 创建 <DiffusionField Name="...">
+            field_node = ET.SubElement(solver_node, 'DiffusionField', attrib={'Name': field_name})
+            
+            # 创建 <DiffusionData>
+            data_node = ET.SubElement(field_node, 'DiffusionData')
+            
+            # 必填项：<FieldName>
+            name_node = ET.SubElement(data_node, 'FieldName')
+            name_node.text = field_name
+            
+            # 可选项：扩散率、衰减率、初始表达式
+            if 'GlobalDiffusionConstant' in params:
+                diff_node = ET.SubElement(data_node, 'GlobalDiffusionConstant')
+                diff_node.text = str(params['GlobalDiffusionConstant'])
+                
+            if 'GlobalDecayConstant' in params:
+                decay_node = ET.SubElement(data_node, 'GlobalDecayConstant')
+                decay_node.text = str(params['GlobalDecayConstant'])
+                
+            if 'InitialConcentrationExpression' in params:
+                init_node = ET.SubElement(data_node, 'InitialConcentrationExpression')
+                init_node.text = str(params['InitialConcentrationExpression'])
+
+            # 检测这个场是否包含趋化性 (Chemotaxis) 设置
+            if 'Chemotaxis' in params and params['Chemotaxis']:
+                has_chemotaxis = True
+
+            # (预留位置)：如果你以后需要处理 BoundaryConditions，可以在这里继续创建节点
+
+        # ==========================================
+        # 2. 重建 Chemotaxis 插件节点 (如果存在)
+        # ==========================================
+        if has_chemotaxis:
+            # 创建 <Plugin Name="Chemotaxis">
+            chemo_plugin = ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Chemotaxis'})
+            
+            for field_name, params in field_params.items():
+                if 'Chemotaxis' in params and params['Chemotaxis']:
+                    # 创建 <ChemicalField Name="...">
+                    chem_field_node = ET.SubElement(chemo_plugin, 'ChemicalField', attrib={'Name': field_name})
+                    
+                    # 遍历该场下的所有趋化规则 (CellType -> Lambda)
+                    for cell_type, lambda_val in params['Chemotaxis'].items():
+                        ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
+                            'Type': cell_type,
+                            'Lambda': str(lambda_val)
+                        })
+
+        # （预留位置）：同理，如果以后 Registry 里加了 Secretion，可以在这里按需生成 Secretion 节点。

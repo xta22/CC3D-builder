@@ -97,6 +97,9 @@ class SteppableInjector:
                                 target_volume,
                                 lambda_volume):
 
+        """
+        Set initial volume constraint for "NewCell"
+        """
         content = self._read_file()
         upper = celltype_name.upper()
         marker = f"CC3D_VOLUME_{upper}"
@@ -116,3 +119,23 @@ class SteppableInjector:
         self._write_file(new_content)
 
         print(f"[Injector] Volume init ensured for {celltype_name}")
+
+
+    ### 有可能不用
+    def ensure_field_start_code(self, field_name):
+        """
+        Mark new fiekd in Python
+        """
+        content = self._read_file()
+        upper = field_name.upper()
+        marker = f"CC3D_FIELD_{upper}"
+
+        # 对于 Field，初始化通常是确保拿到 field 的引用
+        block = [
+            f"self.field.{field_name} = self.get_field_secretor('{field_name}')",
+            f"# {field_name} initialized for secretion use"
+        ]
+
+        new_content = self._insert_into_start(content, block, marker=marker)
+        self._write_file(new_content)
+        print(f"[Injector] Field secretor ensured for {field_name}")

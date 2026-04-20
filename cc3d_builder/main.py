@@ -4,15 +4,15 @@ from pathlib import Path
 from cc3d_builder.utils_extensions.paths import RULES_JSON, SIMULATION_DIR, SANDBOX_DIR
 from cc3d_builder.cli.cli_interface import cli_add_rule
 from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
-from cc3d_builder.utils_extensions.utils import ask_celltype_params, handle_new_rule_registration
+from cc3d_builder.utils_extensions.utils import ask_params_cli, handle_new_rule_registration
 from cc3d_builder.core.structure_manager import StructureManager
 from cc3d_builder.core.project_manager import ProjectManager
-
+from cc3d_builder.injector.steppable_injector import SteppableInjector
 
 def main():    
-    user_input = input("Project path: ").strip()
+    user_input = input("Project path (The folder containing .cc3d): ").strip()
     user_project_path = Path(user_input)
-
+    
     if not user_project_path.exists():
         print(f"❌ Project path does not exist: {user_project_path}")
         return
@@ -21,11 +21,12 @@ def main():
     pm.import_user_project(user_project_path)
 
     sm = StructureManager(SANDBOX_DIR)
+    injector = SteppableInjector(SANDBOX_DIR)
     registry = SimulationRegistry(SANDBOX_DIR, structure_manager=sm)
     print(f"🔄 Loading registry from sandbox: {SANDBOX_DIR}")
     registry.load()
 
-    rule = cli_add_rule()
+    rule = cli_add_rule(registry, sm, injector)
 
     if not rule:
         print("Operation cancelled.")
@@ -35,7 +36,9 @@ def main():
         handle_new_rule_registration(
             registry, 
             rule, 
-            ask_celltype_params 
+            ask_params_cli,
+            sm,
+            injector 
         )
 
         registry.add_rule(rule)
