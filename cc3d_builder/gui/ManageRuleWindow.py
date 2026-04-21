@@ -287,7 +287,7 @@ class ManageRulesWindow(QWidget):
 
             for ct in mentioned_types:
                 if ct and ct not in self.registry.celltype_params:
-                    params_ct = self.main_editor.ask_celltype_params_gui(ct)
+                    params_ct = self.main_editor.ask_params_gui(ct)
                     if params_ct:
                         self.registry.add_celltype_params(
                             ct, params_ct["targetVolume"], params_ct["lambdaVolume"]
@@ -391,7 +391,7 @@ class ManageRulesWindow(QWidget):
             final_params = process_custom_script(
                 file_path = file_path,
                 registry = self.registry,
-                ask_params_func = self.main_editor.ask_celltype_params_gui,
+                ask_params_func = self.main_editor.ask_params_gui,
                 extract_params_func = extract_params,
                 existing_params =rule.get("apply_params", {}) 
             )

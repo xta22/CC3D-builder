@@ -567,7 +567,7 @@ class MainWindow(QWidget):
 
                 for ct in new_types:
                     if ct not in self.registry.celltype_params:
-                        params_ct = self.ask_celltype_params_gui(ct)
+                        params_ct = self.ask_params_gui(ct)
 
                         if params_ct is None:
                             return

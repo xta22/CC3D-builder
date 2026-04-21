@@ -1,3 +1,4 @@
+# simulation_registry.py
 import json
 from pathlib import Path
 from cc3d_builder.core.structure_manager import StructureManager
@@ -73,7 +74,7 @@ class SimulationRegistry:
 
         self.rules.append(rule)
         self._build_index()
-        self.save()
+        # self.save()
 
     # ============================================================
     # DELETE

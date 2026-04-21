@@ -1,1 +1,17 @@
-{"rules": [], "celltype_params": {}, "field_params": {}}
+{
+  "rules": [],
+  "celltype_params": {
+    "Cell": {
+      "should_initialize": true,
+      "initial_count": 5,
+      "targetVolume": 50.0,
+      "lambdaVolume": 2.0
+    },
+    "CellA": {
+      "should_initialize": true,
+      "initial_count": 5,
+      "targetVolume": 50.0,
+      "lambdaVolume": 2.0
+    }
+  }
+}

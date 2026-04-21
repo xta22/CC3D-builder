@@ -80,8 +80,6 @@ def ask_params_gui(self, mode, name):
                 self.registry.add_rule(secrete_rule)
                 print(f"✅ Auto-generated secretion rule for {name}")
                 
-            # 返回给 handle_new_rule_registration 
-            # 确保包含 'diff' 和 'dec' 键值
             return field_params
     return None
 
@@ -96,23 +94,23 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
         if ct not in registry.celltype_params:
             params_ct = input_handler("celltype", ct)
             if params_ct:
-                    injector.ensure_volume_start_code(ct, params_ct['vol'], params_ct['lamb'])
-                    registry.add_celltype_params(ct, params_ct['vol'], params_ct['lamb'])
+                # injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
+                registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
 
     new_fields = extract_fields_from_rule(rule)
     for f_name in new_fields:
-        if f_name not in registry.fields:
+        if f_name not in registry.fields_params:
             if sm.ensure_field(f_name):
                 params = input_handler("field", f_name)
                 if params:
-                    sm.update_field_params(f_name, params['GlobalDiffusionConstant'], params['GlobalDecayConstant'])
-                    injector.ensure_field_start_code(f_name)
+                    # sm.update_field_params(f_name, params['GlobalDiffusionConstant'], params['GlobalDecayConstant'])
+                    # injector.ensure_field_start_code(f_name)
                     registry.add_field_params(f_name)
                     
-    registry.add_rule(rule)
+    registry.rules.append(rule)
 
-    from cc3d_builder.injector.inject import process_and_inject_rule
-    process_and_inject_rule(registry.project_path, registry, rule)
+    # from cc3d_builder.injector.inject import process_and_inject_rule
+    # process_and_inject_rule(registry.project_path, registry, rule)
 
 
 def process_custom_script(file_path, registry, ask_params_func, extract_params_func=None, existing_params=None):
