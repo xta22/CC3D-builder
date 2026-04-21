@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 import sys
 from pathlib import Path
 import traceback
+from cc3d_builder.core.project_manager import ProjectManager
 
 CURRENT_FILE = Path(__file__).resolve()
 BUILDER_ROOT = CURRENT_FILE.parents[2] 
@@ -16,6 +17,7 @@ try:
     from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
     from cc3d_builder.core.structure_manager import StructureManager
     from cc3d_builder.gui.main_editor import MainWindow
+    from cc3d_builder.core.project_manager import ProjectManager
     print("✅ All modules loaded successfully")
 except ImportError as e:
     print(f"❌ CRITICAL ERROR: Could not import necessary modules!")
@@ -27,6 +29,8 @@ class ProjectLoader(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.sandbox_dir = BUILDER_ROOT / "Rules_project"
+        self.project_manager = ProjectManager(self.sandbox_dir)
 
         self.setWindowTitle("CC3D Project Loader")
         self.resize(400, 150)
@@ -60,39 +64,50 @@ class ProjectLoader(QWidget):
             QMessageBox.warning(self, "Error", "Please select a project path!")
             return
         
-        project_path = Path(raw_path).resolve()
-        sim_path = project_path / "Simulation"
-        if not sim_path.exists():
-            QMessageBox.critical(self, "Invalid Project", f"Cannot find 'Simulation' folder in:\n{project_path}")
-            return
-        print(f"📂 Loading Project: {project_path}")
- 
+        source_path = Path(raw_path).resolve()
+        
+        json_exists = (self.sandbox_dir / "rules.json").exists()
+        is_import = False
+        
+        if json_exists:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Load Mode")
+            msg.setText("How would you like to load this project?")
+            # remove and reset rules.json)
+            btn_import = msg.addButton("Import New (Clear Rules)", QMessageBox.ActionRole)
+            # keep rules.json)
+            btn_resume = msg.addButton("Resume (Keep Rules)", QMessageBox.ActionRole)
+            msg.addButton(QMessageBox.Cancel)
+            
+            msg.exec_()
+            
+            if msg.clickedButton() == btn_import:
+                is_import = True
+            elif msg.clickedButton() == btn_resume:
+                is_import = False
+            else:
+                return # user chooses Cancel
+        else:
+            # initialize import
+            is_import = True
+
         try:
-            sm = StructureManager(project_path)
-            print(">>> REGISTRY & STRUCTUREMANAGER IMPORT OK <<<")
+            self.project_manager.initialize_project(source_path, is_import=is_import)
 
-            self.registry = SimulationRegistry(project_path, structure_manager = sm)
-            print(">>> REGISTRY CREATED <<<")
-
-            self.registry.load()
-            print(">>> REGISTRY LOADED <<<")
+            sm = StructureManager(self.sandbox_dir)
+            self.registry = SimulationRegistry(self.sandbox_dir, structure_manager=sm)
+            
+            self.registry.load() # here file would have rules.json
 
             self.main_window = MainWindow(registry=self.registry)
-            print(">>> MAINWINDOW CREATED <<<")
-
             self.main_window.show()
-
-            self.main_window.raise_()
-            self.main_window.activateWindow()
-
             self.close()
-            print(">>> DONE <<<")
 
         except Exception as e:
-            import traceback
-            error_msg = traceback.format_exc()
-            print(error_msg)
-            QMessageBox.critical(self, "Load Failed", f"An error occurred while loading the project:\n{str(e)}")
+            traceback.print_exc()
+            QMessageBox.critical(self, "Load Failed", f"Error:\n{str(e)}")
+
+
 
 
 if __name__ == "__main__":

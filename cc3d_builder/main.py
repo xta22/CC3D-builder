@@ -10,15 +10,32 @@ from cc3d_builder.core.project_manager import ProjectManager
 from cc3d_builder.injector.steppable_injector import SteppableInjector
 
 def main():    
-    user_input = input("Project path (The folder containing .cc3d): ").strip()
+    user_input = input("👉 Enter CC3D Project path (containing .cc3d): ").strip()
     user_project_path = Path(user_input)
     
     if not user_project_path.exists():
-        print(f"❌ Project path does not exist: {user_project_path}")
+        print(f"❌ Error: Project path does not exist: {user_project_path}")
         return
     
+    # Initialize ProjectManager
+    # SANDBOX_DIR: "Rules_project" 
     pm = ProjectManager(SANDBOX_DIR)
-    pm.import_user_project(user_project_path)
+    
+    json_exists = (SANDBOX_DIR / "rules.json").exists()
+    
+    if json_exists:
+        print("\n⚠️  Existing rules detected in the sandbox!")
+        choice = input("Do you want to [I]mport new (clear rules) or [R]esume editing? (I/R): ").strip().upper()
+        
+        if choice == 'I':
+            pm.initialize_project(user_project_path, is_import=True)
+            print("✅ New project imported. Rules have been reset.")
+        else:
+            pm.initialize_project(user_project_path, is_import=False)
+            print("✅ Resuming... Existing rules preserved.")
+    else:
+        print("🐣 Initializing workspace for the first time...")
+        pm.initialize_project(user_project_path, is_import=True)
 
     sm = StructureManager(SANDBOX_DIR)
     injector = SteppableInjector(SANDBOX_DIR)

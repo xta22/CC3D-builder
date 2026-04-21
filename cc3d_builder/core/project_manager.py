@@ -1,31 +1,48 @@
-# projecy_manager.py
 import shutil
 from pathlib import Path
-from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
+
 class ProjectManager: 
     def __init__(self, sandbox_path: Path):
         self.sandbox = sandbox_path
+    
+    def initialize_project(self, source_path: Path, is_import: bool = False):
+        """
+        called by CLI or GUI 
+        """
+        src = source_path.resolve()
+        json_path = self.sandbox / "rules.json"
 
-    def import_user_project(self, source_path):
-        src = Path(source_path).resolve()
-        
-        # 1. 清理旧沙盒
-        if self.sandbox.exists():
-            shutil.rmtree(self.sandbox)
-        self.sandbox.mkdir(parents=True)
+        if is_import:
+            # Import new projects 
+            print(f"🚀 Importing new project from: {src}")
+            self._clear_and_copy_assets(src)
+            # empty or reset json
+            self._reset_rules_json()
 
-        # 1. 提取 XML 并重命名到根目录
-        xml_file = list(src.rglob("*.xml"))[0] # 使用 rglob 自动深搜
-        shutil.copy2(xml_file, self.sandbox/ "Rules_project.xml")
-
-        # 2. 提取 Python Steppable 并重命名到根目录
-        py_file = list(src.rglob("*Steppables.py"))[0]
-        shutil.copy2(py_file, self.sandbox / "Rules_project_Steppables.py")
-
-        # 3. 提取或初始化 JSON 到根目录
-        src_json = list(src.rglob("rules.json"))
-        if src_json:
-            shutil.copy2(src_json[0], self.sandbox / "rules.json")
         else:
-            # 如果用户项目没这个文件，创建一个空的
-            (self.sandbox / "rules.json").write_text('{"rules": [], "celltype_params": {}}')
+            # Continue working on current sandbox 
+            if json_path.exists():
+                print("♻️ Resuming: Existing project and rules detected.")
+            else:
+                # local workspace but still would like to reset
+                print("🐣 Initializing empty workspace...")
+                self._reset_rules_json()
+
+
+    def _clear_and_copy_assets(self, src: Path):
+        """ move and reset XML and Steppable """
+
+        # 1. XML 
+        xml_files = list(src.rglob("*.xml"))
+        if xml_files:
+            shutil.copy2(xml_files[0], self.sandbox / "Rules_project.xml")
+
+        # 2. Steppables
+        py_files = list(src.rglob("*Steppables.py"))
+        if py_files:
+            shutil.copy2(py_files[0], self.sandbox / "Rules_project_Steppables.py")
+
+    def _reset_rules_json(self):
+        """ clean JSON """
+        json_path = self.sandbox / "rules.json"
+        json_path.write_text('{"rules": [], "celltype_params": {}, "field_params": {}}')
