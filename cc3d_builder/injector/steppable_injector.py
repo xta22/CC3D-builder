@@ -5,7 +5,7 @@ class SteppableInjector:
 
     def __init__(self, project_path):
         self.project_path = Path(project_path).resolve()
-        sim_dir = self.project_path / "Simulation"
+        sim_dir = self.project_path
         if not sim_dir.exists():
             raise Exception(f"Simulation directory not found at: {sim_dir}")
         steppable_files = list(sim_dir.glob("*Steppables.py"))
