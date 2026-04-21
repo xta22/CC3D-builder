@@ -13,16 +13,16 @@ import importlib.util
 from cc3d_builder.utils_extensions.utils import process_custom_script, extract_params
 from typing import TYPE_CHECKING, Optional, List, Dict
 if TYPE_CHECKING:
-    from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+    from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 
 
 class ManageRulesWindow(QWidget):
-    def __init__(self, registry: 'SimulationRegistry', sm, injector, ask_cell_func=None, main_editor=None):
+    def __init__(self, registry: 'SimulationRegistry', sm, injector, ask_func=None, main_editor=None):
         super().__init__()
         self.registry = registry
         self.sm = sm
         self.injector = injector
-        self.ask_cell_func = ask_cell_func
+        self.ask_cell_func = ask_func
         self.main_editor = main_editor
         self.resize(1600, 800) 
         

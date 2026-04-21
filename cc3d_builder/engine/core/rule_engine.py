@@ -12,10 +12,10 @@ if str(sim_dir) not in sys.path:
 
 from cc3d.core.PySteppables import *  # cc3d has its own built-in python interpreter 
 
-from Rules_project.Simulation.behaviour_plugins.growth_plugin import GrowthPlugin
-from Rules_project.Simulation.behaviour_plugins.differentiate_plugin import DifferentiationPlugin
-from Rules_project.Simulation.core.condition_evaluator import evaluate_condition
-from Rules_project.Simulation.behaviour_plugins.create_plugin import CreatePlugin
+from cc3d_builder.engine.behaviour_plugins.growth_plugin import GrowthPlugin
+from cc3d_builder.engine.behaviour_plugins.differentiate_plugin import DifferentiationPlugin
+from cc3d_builder.engine.core.condition_evaluator import evaluate_condition
+from cc3d_builder.engine.behaviour_plugins.create_plugin import CreatePlugin
 
 class RuleEngineSteppable(SteppableBasePy):
 

@@ -187,7 +187,6 @@ def parse_diff_row(row):
 # UNIFIED IMPORTER
 # =========================
 def import_rules_from_csv(path):
-    import pandas as pd
     df = pd.read_csv(path)
 
     if "behaviour" not in df.columns:

@@ -13,7 +13,7 @@ from cc3d_builder.core.structure_manager import StructureManager
 from cc3d_builder.injector.steppable_injector import SteppableInjector
 from cc3d_builder.injector.inject import process_and_inject_rule
 from cc3d_builder.utils_extensions.paths import ROOT, SANDBOX_DIR
-from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 import re
 from typing import Any
 from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
@@ -590,7 +590,12 @@ class MainWindow(QWidget):
             return
         # “Pass in self so that ManageRulesWindow can access all the methods of the main window.”
         from cc3d_builder.gui.ManageRuleWindow import ManageRulesWindow
-        self.manage_win = ManageRulesWindow(self.registry, ask_cell_func=self.ask_celltype_params_gui, main_editor=self)
+        self.manage_win = ManageRulesWindow(self.registry,
+                                            self.sm,
+                                            self.injector,
+                                            ask_func= lambda mode, name: ask_params_gui(self, mode, name),
+                                            main_editor=self
+                                            )
         self.manage_win.show()
 
     def build_condition_gui(self):

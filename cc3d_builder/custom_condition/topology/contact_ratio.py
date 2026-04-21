@@ -6,7 +6,7 @@ from cc3d_builder.utils_extensions.paths import ROOT, SIMULATION_DIR
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from Rules_project.Simulation.core.rule_engine import RuleEngineSteppable
+    from cc3d_builder.engine.core.rule_engine import RuleEngineSteppable
 
 OPS = {
     ">": operator.gt,

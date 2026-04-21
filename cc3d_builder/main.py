@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from cc3d_builder.utils_extensions.paths import RULES_JSON, SIMULATION_DIR, SANDBOX_DIR
 from cc3d_builder.cli.cli_interface import cli_add_rule
-from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 from cc3d_builder.utils_extensions.utils import ask_params_cli, handle_new_rule_registration
 from cc3d_builder.core.structure_manager import StructureManager
 from cc3d_builder.core.project_manager import ProjectManager

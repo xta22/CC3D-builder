@@ -13,7 +13,7 @@ if str(BUILDER_ROOT) not in sys.path:
 print(f"📍 Project Root: {BUILDER_ROOT}")
 
 try:
-    from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+    from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
     from cc3d_builder.core.structure_manager import StructureManager
     from cc3d_builder.gui.main_editor import MainWindow
     print("✅ All modules loaded successfully")

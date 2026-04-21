@@ -13,11 +13,15 @@ class StructureManager:
         # future registered new conditions would be added here.
     }
     def __init__(self, project_path):
-        self.project_path = Path(project_path)
-        self.xml_path = self.project_path / "Simulation" / f"{self.project_path.name}.xml"
+        self.project_path = Path(project_path) # Rules_project
+        self.xml_path = self.project_path / "Rules_project.xml"
+        
+        if not self.xml_path.exists():
+            raise FileNotFoundError(f"❌ XML file not found at: {self.xml_path}. "
+                                    "Make sure ProjectManager.import_user_project() runs first!")
+        
         self.tree = ET.parse(str(self.xml_path))
         self.root = self.tree.getroot()
-
         self._seen_celltypes = set()
 
     def check_and_inject_dependencies(self, rules_json_data):

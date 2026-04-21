@@ -1,7 +1,7 @@
 # cli_interface.py
 
 from cc3d_builder.core.rule_builder import build_rule
-from Rules_project.Simulation.registry.simulation_registry import SimulationRegistry
+from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 from cc3d_builder.utils_extensions.utils import handle_new_rule_registration, ask_params_cli
 
 def cli_add_rule(registry, sm, injector):

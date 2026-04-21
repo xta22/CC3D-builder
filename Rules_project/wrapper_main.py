@@ -2,11 +2,11 @@ print(">>> WRAPPER LOADED <<<")
 
 from cc3d import CompuCellSetup
 
-from Rules_project.Simulation.Rules_projectSteppables import ConstraintInitializerSteppable
-from Rules_project.Simulation.core.rule_engine import RuleEngineSteppable
-from Rules_project.Simulation.steppables.growth_steppable import GrowthSteppable
-from Rules_project.Simulation.steppables.differentiate_steppable import DifferentiateSteppable
-from Rules_project.Simulation.steppables.create_steppable import CreateSteppable
+from Rules_project.Rules_projectSteppables import ConstraintInitializerSteppable
+from cc3d_builder.engine.core.rule_engine import RuleEngineSteppable
+from cc3d_builder.engine.steppables.growth_steppable import GrowthSteppable
+from cc3d_builder.engine.steppables.differentiate_steppable import DifferentiateSteppable
+from cc3d_builder.engine.steppables.create_steppable import CreateSteppable
 
 CompuCellSetup.register_steppable(
     ConstraintInitializerSteppable(frequency=1)

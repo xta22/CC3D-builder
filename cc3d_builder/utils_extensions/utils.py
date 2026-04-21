@@ -31,10 +31,18 @@ def ask_params_cli(mode, name):
             result = dialog.get_data()
             print(f"✅ Configuration received from GUI.")
             return result
+        '''
         else:
             print(f"⚠️ Dialog cancelled. Using defaults.")
-            return {"diff": 0.1, "dec": 0.001}
-
+            return {
+            "Solver": "DiffusionSolverFE",
+            "GlobalDiffusionConstant": 0.01,      # 必须叫这个名字
+            "GlobalDecayConstant": 0.0001,         # 必须叫这个名字
+            "InitialConcentrationExpression": "0.0",
+            "BoundaryConditions": {},
+            "Chemotaxis": []
+        }
+        '''
     return None
 
 def ask_params_gui(self, mode, name):
@@ -67,6 +75,7 @@ def ask_params_gui(self, mode, name):
                     "behaviour": "secrete",
                     "target": "global",
                     "apply": {"field": name, "rate": 0.1}
+                    # 有不同的secrete mode
                 }
                 self.registry.add_rule(secrete_rule)
                 print(f"✅ Auto-generated secretion rule for {name}")
@@ -96,7 +105,7 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
             if sm.ensure_field(f_name):
                 params = input_handler("field", f_name)
                 if params:
-                    sm.update_field_params(f_name, params['diff'], params['dec'])
+                    sm.update_field_params(f_name, params['GlobalDiffusionConstant'], params['GlobalDecayConstant'])
                     injector.ensure_field_start_code(f_name)
                     registry.add_field_params(f_name)
                     

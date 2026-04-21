@@ -5,18 +5,19 @@ from cc3d_builder.core.structure_manager import StructureManager
 class SimulationRegistry:
 
     def __init__(self, project_path,structure_manager=None):
-
-        self.project_path = project_path
-
+        # here it is sandbox_dir from main.py and main_editor.py
+        self.project_path = Path(project_path)
         self.sm = structure_manager
 
-        self.rules_path = self.project_path / "Simulation" / "config" / "rules.json"
-        self.xml_path = self.project_path / "Simulation" / "Rules_project.xml"
-
+        self.rules_path = self.project_path /  "rules.json"
+        self.xml_path = self.project_path /  "Rules_project.xml"
+        self.py_path    = self.project_path / "Rules_project_Steppables.py"
+        # 暂时没用但是还是写着了
         self.rules = []
         self.cell_index = {}
         self.behaviour_index = {}
         self.celltype_params = {}
+        self.field_params = {}
 
     def add_celltype_params(self, name, target, lam):
         self.celltype_params[name] = {
@@ -186,3 +187,25 @@ class SimulationRegistry:
         
         if modified:
             self.save() 
+
+
+    def add_field_params(self, field_name, params):
+        """
+        params 是从 FieldSetupDialog.get_data() 获取的那个巨大的字典
+        """
+        if not hasattr(self, 'field_params'):
+            self.field_params = {}
+
+        # 直接存储整个结构化字典，这样以后 XML 导出时可以拿到所有细节（包括边界条件和趋化）
+        self.field_params[field_name] = {
+            "solver": params.get("Solver", "DiffusionSolverFE"),
+            "diffusion_constant": params.get("GlobalDiffusionConstant", 0.1),
+            "decay_constant": params.get("GlobalDecayConstant", 0.001),
+            "initial_expression": params.get("InitialConcentrationExpression", "0.0"),
+            "boundary_conditions": params.get("BoundaryConditions", {}),
+            "chemotaxis": params.get("Chemotaxis", []),
+            "python_secretion": params.get("ControlSecretionPython", False)
+        }
+        
+        print(f"✅ Registry updated for field: {field_name}")
+        self.save() # 存入 rules.json

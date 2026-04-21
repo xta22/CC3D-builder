@@ -7,30 +7,25 @@ class ProjectManager:
         self.sandbox = sandbox_path
 
     def import_user_project(self, source_path):
-            src = Path(source_path).resolve()
-            # 确定沙盒内的 Simulation 目录
-            dst_sim = self.sandbox / "Simulation"
-            
-            # 1. 清理旧沙盒
-            if self.sandbox.exists():
-                shutil.rmtree(self.sandbox)
-            self.sandbox.mkdir(parents=True)
-            dst_sim.mkdir()
+        src = Path(source_path).resolve()
+        
+        # 1. 清理旧沙盒
+        if self.sandbox.exists():
+            shutil.rmtree(self.sandbox)
+        self.sandbox.mkdir(parents=True)
 
-            # 2. 精准提取
-            # A. 拷贝 .cc3d 文件到 Rules_project 根目录
-            cc3d_files = list(src.glob("*.cc3d"))
-            for f in cc3d_files:
-                shutil.copy2(f, self.sandbox / f.name)
+        # 1. 提取 XML 并重命名到根目录
+        xml_file = list(src.rglob("*.xml"))[0] # 使用 rglob 自动深搜
+        shutil.copy2(xml_file, self.sandbox/ "Rules_project.xml")
 
-            # B. 拷贝 Simulation 内部的 xml 和 python 文件
-            src_sim = src / "Simulation"
-            if src_sim.exists():
-                for item in src_sim.iterdir():
-                    if item.is_file() and item.suffix in ['.xml', '.py', '.json']:
-                        shutil.copy2(item, dst_sim)
-                    elif item.is_dir():
-                        # 如果有子目录（如 config），也考过去
-                        shutil.copytree(item, dst_sim / item.name)
-            
-            print(f"✅ 精准提取完成：{self.sandbox}")
+        # 2. 提取 Python Steppable 并重命名到根目录
+        py_file = list(src.rglob("*Steppables.py"))[0]
+        shutil.copy2(py_file, self.sandbox / "Rules_project_Steppables.py")
+
+        # 3. 提取或初始化 JSON 到根目录
+        src_json = list(src.rglob("rules.json"))
+        if src_json:
+            shutil.copy2(src_json[0], self.sandbox / "rules.json")
+        else:
+            # 如果用户项目没这个文件，创建一个空的
+            (self.sandbox / "rules.json").write_text('{"rules": [], "celltype_params": {}}')
