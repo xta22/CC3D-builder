@@ -48,8 +48,9 @@ def main():
     if not rule:
         print("Operation cancelled.")
         return
-
+    
     try:
+        '''
         handle_new_rule_registration(
             registry, 
             rule, 
@@ -57,13 +58,13 @@ def main():
             sm,
             injector 
         )
-
-        registry.add_rule(rule)
-        registry.save() # Rules_project/Simulation/config/rules.json
-        registry.export_to_xml() # Rules_project/Simulation/Rules_project.xml
+        '''
+        # registry.add_rule(rule)
+        registry.save() # Rules_project/rules.json
+        registry.export_to_xml() # Rules_project/Rules_project.xml
         print("✅ Rule successfully added and injected ✔")
         print(f"📍 Modified files are at: {SANDBOX_DIR}")
-    
+
     except Exception as e:
         import traceback
         traceback.print_exc()

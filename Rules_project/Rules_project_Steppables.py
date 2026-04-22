@@ -16,6 +16,11 @@ class ConstraintInitializerSteppable(SteppableBasePy):
         SteppableBasePy.__init__(self,frequency)
 
     def start(self):
+        # === CC3D_VOLUME_CELLB START ===
+        for cell in self.cell_list_by_type(self.CELLB):
+            cell.targetVolume = 50.0
+            cell.lambdaVolume = 10.0
+        # === CC3D_VOLUME_CELLB END ===
         # === CC3D_VOLUME_CELLA START ===
         for cell in self.cell_list_by_type(self.CELLA):
             cell.targetVolume = 50.0

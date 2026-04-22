@@ -71,8 +71,9 @@ class SimulationRegistry:
     # ============================================================
 
     def add_rule(self, rule):
-
+        print("before append:", len(self.rules), rule.get("id"), id(rule))
         self.rules.append(rule)
+        print("after append:", len(self.rules))
         self._build_index()
         # self.save()
 
@@ -115,7 +116,8 @@ class SimulationRegistry:
         with open(self.rules_path, "w") as f:
             json.dump({
                 "rules": self.rules,
-                "celltype_params": self.celltype_params
+                "celltype_params": self.celltype_params,
+                "field_params": self.field_params
             }, f, indent=2)
 
     # ============================================================

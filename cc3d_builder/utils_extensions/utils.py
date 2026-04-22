@@ -14,7 +14,7 @@ def ask_params_cli(mode, name):
     if mode == "celltype":
         v = float(input(f"\n[New Type: {name}] Target Volume [50]: ") or 50)
         l = float(input(f"[New Type: {name}] Lambda Volume [10]: ") or 10)
-        return {"vol": v, "lamb": l}
+        return {"targetVolume": v, "lambdaVolume": l}
     elif mode == "field":
         print("Launching Diffusion Equation Solvers Now...")
         from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
@@ -45,30 +45,30 @@ def ask_params_cli(mode, name):
         '''
     return None
 
-def ask_params_gui(self, mode, name):
+def ask_params_gui(mode, name, parent):
     """
     Generic parameter retriever: supports both CellType and Field
     """
+    print(f"DEBUG: ask_params_gui called with mode='{mode}', name='{name}'")
     if mode == "celltype":
         target, ok1 = QInputDialog.getDouble(
-            self, f"New CellType: {name}", "targetVolume:", 50
+            parent, f"New CellType: {name}", "targetVolume:", 50
         )
         lam, ok2 = QInputDialog.getDouble(
-            self, f"New CellType: {name}", "lambdaVolume:", 10
+            parent, f"New CellType: {name}", "lambdaVolume:", 10
         )
         if ok1 and ok2:
-            return {"vol": target, "lamb": lam}
+            return {"targetVolume": target, "lambdaVolume": lam}
             
 
     elif mode == "field":
-        available_cells = list(self.registry.celltype_params.keys())
+        available_cells = list(parent.registry.celltype_params.keys())
         from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
-        dialog = FieldSetupDialog(name, available_cells, self)
+        dialog = FieldSetupDialog(name, available_cells, parent)
         
         if dialog.exec_() == QDialog.Accepted:
             field_params = dialog.get_data()
             
-            # 这里处理你之前提到的“自动添加 Secretion Rule”逻辑
             if field_params.pop("ControlSecretionPython", False):
                 secrete_rule = {
                     "id": f"auto_secrete_{name}",
@@ -77,7 +77,7 @@ def ask_params_gui(self, mode, name):
                     "apply": {"field": name, "rate": 0.1}
                     # 有不同的secrete mode
                 }
-                self.registry.add_rule(secrete_rule)
+                parent.registry.add_rule(secrete_rule)
                 print(f"✅ Auto-generated secretion rule for {name}")
                 
             return field_params
@@ -94,17 +94,18 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
         if ct not in registry.celltype_params:
             params_ct = input_handler("celltype", ct)
             if params_ct:
-                # injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
+                injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
                 registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
 
     new_fields = extract_fields_from_rule(rule)
+    print(f"DEBUG: Detected fields in this rule: {new_fields}") 
     for f_name in new_fields:
-        if f_name not in registry.fields_params:
+        if f_name not in registry.field_params:
             if sm.ensure_field(f_name):
                 params = input_handler("field", f_name)
                 if params:
-                    # sm.update_field_params(f_name, params['GlobalDiffusionConstant'], params['GlobalDecayConstant'])
-                    # injector.ensure_field_start_code(f_name)
+                    sm.update_field_params(f_name, params['GlobalDiffusionConstant'], params['GlobalDecayConstant'])
+                    injector.ensure_field_start_code(f_name)
                     registry.add_field_params(f_name)
                     
     registry.rules.append(rule)

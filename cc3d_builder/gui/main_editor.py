@@ -9,11 +9,8 @@ from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.core.csv_importer import import_rules_from_csv
 from cc3d_builder.utils_extensions.utils import  handle_new_rule_registration, ask_params_gui, process_custom_script, extract_params
 from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule 
-from cc3d_builder.core.structure_manager import StructureManager
-from cc3d_builder.injector.steppable_injector import SteppableInjector
 from cc3d_builder.injector.inject import process_and_inject_rule
 from cc3d_builder.utils_extensions.paths import ROOT, SANDBOX_DIR
-from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 import re
 from typing import Any
 from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
@@ -26,11 +23,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 class MainWindow(QWidget):
 
-    def __init__(self, registry: SimulationRegistry | None = None):
+    def __init__(self, registry=None, sm=None, injector=None):
         
         super().__init__()
         print(">>> ENTER MAIN WINDOW INIT <<<")
         self.registry = registry
+        self.sm = sm        
+        self.injector = injector
+        self.ask_params_gui = ask_params_gui
 
         layout = QVBoxLayout()
 
@@ -269,7 +269,7 @@ class MainWindow(QWidget):
             handle_new_rule_registration(
                 self.registry, 
                 rule, 
-                self.ask_params_gui,
+                lambda m, n: ask_params_gui(m, n, self),
                 self.sm,
                 self.injector 
             )
@@ -530,7 +530,7 @@ class MainWindow(QWidget):
         final_params = process_custom_script(
             file_path = str(file_path),
             registry = self.registry,
-            ask_params_func = self.ask_params_gui,
+            ask_params_func = lambda m, n: ask_params_gui(m, n, self),
             extract_params_func = extract_params,    
             existing_params = None
         )
@@ -567,7 +567,7 @@ class MainWindow(QWidget):
 
                 for ct in new_types:
                     if ct not in self.registry.celltype_params:
-                        params_ct = self.ask_params_gui(ct)
+                        params_ct = ask_params_gui("celltype",ct,self)
 
                         if params_ct is None:
                             return
@@ -576,6 +576,17 @@ class MainWindow(QWidget):
                             params_ct['targetVolume'],
                             params_ct['lambdaVolume']
                         )
+
+                new_fields = extract_fields_from_rule(rule)
+                for f_name in new_fields:
+                    if f_name not in self.registry.field_params:
+                        params_f = ask_params_gui("field", f_name, self)
+                        if params_f is None: return
+                        
+                        self.registry.add_field_params(f_name, params_f)
+                        if self.sm: 
+                            self.sm.ensure_field(f_name)
+
                 self.registry.add_rule(rule)
                 process_and_inject_rule(self.registry.project_path, self.registry, rule)
 
@@ -590,17 +601,18 @@ class MainWindow(QWidget):
             return
         # “Pass in self so that ManageRulesWindow can access all the methods of the main window.”
         from cc3d_builder.gui.ManageRuleWindow import ManageRulesWindow
+
         self.manage_win = ManageRulesWindow(self.registry,
                                             self.sm,
                                             self.injector,
-                                            ask_func= lambda mode, name: ask_params_gui(self, mode, name),
+                                            ask_func=lambda m, n: ask_params_gui(m, n, self),
                                             main_editor=self
                                             )
         self.manage_win.show()
 
     def build_condition_gui(self):
         # explicityly import
-        from gui.build_condition_gui import build_condition_gui as real_builder
+        from cc3d_builder.gui.build_condition_gui import build_condition_gui as real_builder
         return real_builder(self)
 
 

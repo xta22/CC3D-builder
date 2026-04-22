@@ -18,6 +18,8 @@ try:
     from cc3d_builder.core.structure_manager import StructureManager
     from cc3d_builder.gui.main_editor import MainWindow
     from cc3d_builder.core.project_manager import ProjectManager
+    from cc3d_builder.injector.steppable_injector import SteppableInjector
+    
     print("✅ All modules loaded successfully")
 except ImportError as e:
     print(f"❌ CRITICAL ERROR: Could not import necessary modules!")
@@ -95,11 +97,17 @@ class ProjectLoader(QWidget):
             self.project_manager.initialize_project(source_path, is_import=is_import)
 
             sm = StructureManager(self.sandbox_dir)
+            injector = SteppableInjector(self.sandbox_dir)
+
             self.registry = SimulationRegistry(self.sandbox_dir, structure_manager=sm)
             
             self.registry.load() # here file would have rules.json
 
-            self.main_window = MainWindow(registry=self.registry)
+            self.main_window = MainWindow(
+                registry=self.registry, 
+                sm=sm, 
+                injector=injector
+            )
             self.main_window.show()
             self.close()
 

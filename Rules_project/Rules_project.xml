@@ -13,6 +13,7 @@
         <CellType TypeId="0" TypeName="Medium"></CellType>
         <CellType TypeId="1" TypeName="Cell"></CellType>
         <CellType TypeName="CellA" TypeId="2"></CellType>
+        <CellType TypeName="CellB" TypeId="3"></CellType>
     </Plugin>
     <Plugin Name="CenterOfMass">
    </Plugin>
@@ -28,28 +29,61 @@
         <Energy Type1="CellA" Type2="Medium">10.0</Energy>
         <Energy Type1="Cell" Type2="CellA">10.0</Energy>
         <Energy Type1="CellA" Type2="CellA">10.0</Energy>
+        <Energy Type1="CellB" Type2="Medium">10.0</Energy>
+        <Energy Type1="Cell" Type2="CellB">10.0</Energy>
+        <Energy Type1="CellA" Type2="CellB">10.0</Energy>
+        <Energy Type1="CellB" Type2="CellB">10.0</Energy>
     </Plugin>
+    <Plugin Name="Chemotaxis">
+        <ChemicalField Name="Oxygen">
+            <ChemotaxisByType Lambda="1000.0" Type="Cell"></ChemotaxisByType>
+        </ChemicalField>
+    </Plugin>
+    <Plugin Name="Secretion">
+   </Plugin>
+    <Steppable Type="DiffusionSolverFE">
+        <DiffusionField Name="Oxygen">
+            <DiffusionData>
+                <FieldName>Oxygen</FieldName>
+                <GlobalDiffusionConstant>0.9</GlobalDiffusionConstant>
+                <GlobalDecayConstant>1e-05</GlobalDecayConstant>
+                <InitialConcentrationExpression>x/100</InitialConcentrationExpression>
+                <DiffusionCoefficient CellType="Cell">0.9</DiffusionCoefficient>
+                <DecayCoefficient CellType="Cell">1e-05</DecayCoefficient>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantValue PlanePosition="Min" Value="0.0"></ConstantValue>
+                    <ConstantValue PlanePosition="Max" Value="1.0"></ConstantValue>
+                </Plane>
+                <Plane Axis="Y">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+    </Steppable>
     <Steppable Type="UniformInitializer">
         <Region>
-            <BoxMin x="196" y="160" z="0"></BoxMin>
-            <BoxMax x="209" y="173" z="1"></BoxMax>
+            <BoxMin x="62" y="152" z="0"></BoxMin>
+            <BoxMax x="75" y="165" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>Cell</Types>
         </Region>
         <Region>
-            <BoxMin x="106" y="126" z="0"></BoxMin>
-            <BoxMax x="119" y="139" z="1"></BoxMax>
+            <BoxMin x="337" y="202" z="0"></BoxMin>
+            <BoxMax x="350" y="215" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>CellA</Types>
         </Region>
-    </Steppable>
-    <Steppable Type="DiffusionSolverFE">
-        <DiffusionField Name="Oxygen">
-            <DiffusionData>
-                <FieldName>Oxygen</FieldName>
-            </DiffusionData>
-        </DiffusionField>
+        <Region>
+            <BoxMin x="304" y="121" z="0"></BoxMin>
+            <BoxMax x="317" y="134" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>5</Width>
+            <Types>CellB</Types>
+        </Region>
     </Steppable>
 </CompuCell3D>

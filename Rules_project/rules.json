@@ -1,5 +1,36 @@
 {
-  "rules": [],
+  "rules": [
+    {
+      "id": "1",
+      "target": "CellB",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 2.0,
+              "field_name": "Substrate"
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Substrate",
+            "parameters": {
+              "y_max": 1.0,
+              "y_min": 0.0,
+              "K": 0.5,
+              "n": 2.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    }
+  ],
   "celltype_params": {
     "Cell": {
       "should_initialize": true,
@@ -12,6 +43,11 @@
       "initial_count": 5,
       "targetVolume": 50.0,
       "lambdaVolume": 2.0
+    },
+    "CellB": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
     }
-  }
+  },
+  "field_params": {}
 }

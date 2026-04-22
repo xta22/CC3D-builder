@@ -8,7 +8,7 @@ from PyQt5.QtCore import Qt
 from cc3d_builder.gui.main_editor import MainWindow
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.gui.build_model_gui import build_model_gui
-from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule
+from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
 import importlib.util
 from cc3d_builder.utils_extensions.utils import process_custom_script, extract_params
 from typing import TYPE_CHECKING, Optional, List, Dict
@@ -22,8 +22,9 @@ class ManageRulesWindow(QWidget):
         self.registry = registry
         self.sm = sm
         self.injector = injector
-        self.ask_cell_func = ask_func
         self.main_editor = main_editor
+        self.ask_params_gui = ask_func
+
         self.resize(1600, 800) 
         
         self.main_h_layout = QHBoxLayout(self)
@@ -137,7 +138,7 @@ class ManageRulesWindow(QWidget):
                 handle_new_rule_registration(
                     registry=self.registry,
                     rule=rule,
-                    input_handler=self.ask_params_gui,
+                    input_handler=lambda m, n: self.main_editor.ask_params_gui(m, n, self.main_editor),
                     sm=self.sm,
                     injector=self.injector
                 )
@@ -198,7 +199,7 @@ class ManageRulesWindow(QWidget):
                 handle_new_rule_registration(
                 registry=self.registry,
                 rule=rule,
-                input_handler=self.ask_params_gui,
+                input_handler=lambda m, n: self.main_editor.ask_params_gui(m, n, self.main_editor),
                 sm = self.sm,
                 injector = self.injector,
             )
@@ -287,12 +288,19 @@ class ManageRulesWindow(QWidget):
 
             for ct in mentioned_types:
                 if ct and ct not in self.registry.celltype_params:
-                    params_ct = self.main_editor.ask_params_gui(ct)
+                    params_ct = self.main_editor.ask_params_gui("celltype", ct, self.main_editor)
                     if params_ct:
                         self.registry.add_celltype_params(
                             ct, params_ct["targetVolume"], params_ct["lambdaVolume"]
                         )
 
+            mentioned_fields = extract_fields_from_rule(rule)
+            for f_name in mentioned_fields:
+                if f_name and f_name not in self.registry.field_params:
+                    params_f = self.main_editor.ask_params_gui("field", f_name, self.main_editor)
+                    if params_f:
+                        self.registry.add_field_params(f_name, params_f)
+                        self.sm.ensure_field(f_name)
             self.registry.save()
             self.save_and_sync()
             self.refresh_table()
@@ -391,7 +399,7 @@ class ManageRulesWindow(QWidget):
             final_params = process_custom_script(
                 file_path = file_path,
                 registry = self.registry,
-                ask_params_func = self.main_editor.ask_params_gui,
+                ask_params_func = lambda m, n: self.main_editor.ask_params_gui(m, n, self.main_editor),
                 extract_params_func = extract_params,
                 existing_params =rule.get("apply_params", {}) 
             )
