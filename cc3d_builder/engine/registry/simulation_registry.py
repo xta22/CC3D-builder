@@ -10,9 +10,9 @@ class SimulationRegistry:
         self.project_path = Path(project_path)
         self.sm = structure_manager
 
-        self.rules_path = self.project_path /  "rules.json"
-        self.xml_path = self.project_path /  "Rules_project.xml"
-        self.py_path    = self.project_path / "Rules_project_Steppables.py"
+        self.rules_path = self.project_path / "Simulation" /"rules.json"
+        self.xml_path = self.project_path / "Simulation" /"Rules_project.xml"
+        self.py_path    = self.project_path / "Simulation" /"Rules_project_Steppables.py"
         # 暂时没用但是还是写着了
         self.rules = []
         self.cell_index = {}

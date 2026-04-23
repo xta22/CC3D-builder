@@ -14,7 +14,7 @@ class StructureManager:
     }
     def __init__(self, project_path):
         self.project_path = Path(project_path) # Rules_project
-        self.xml_path = self.project_path / "Rules_project.xml"
+        self.xml_path = self.project_path / "Simulation" /"Rules_project.xml"
         
         if not self.xml_path.exists():
             raise FileNotFoundError(f"❌ XML file not found at: {self.xml_path}. "
@@ -454,6 +454,19 @@ class StructureManager:
                 
                 print(f"[StructureManager] Added Chemotaxis placeholder for {t_name} on field {field_name}")
 
+
+
+
+       
+                # if cell_widget and type_widget:
+                #     self.field_data["Chemotaxis"].append({
+                #         "CellType": cell_widget.currentText(),
+                #         "Lambda": float(self.table_chemo.item(row, 1).text()),
+                #         "Type": type_widget.currentText(),
+                #         "SatCoef": float(self.table_chemo.item(row, 3).text())
+                #     })
+                    
+
     def migrate_field_data(self):
         """
         Extract DiffusionSolverFE and Chemotaxis Configuration from original XML
@@ -546,6 +559,7 @@ class StructureManager:
         """
         根据 Registry 中的 field_params 字典，从头生成纯净的 XML 节点。
         """
+        print("🚨 BUILD XML CALLED")
         if not field_params:
             return  # 如果没有任何场数据，直接返回
 
@@ -555,9 +569,13 @@ class StructureManager:
         # 创建 <Steppable Type="DiffusionSolverFE">
         solver_node = ET.SubElement(self.root, 'Steppable', attrib={'Type': 'DiffusionSolverFE'})
         
-        has_chemotaxis = False
+        has_chemotaxis = any(
+            'chemotaxis' in p and p['chemotaxis']
+            for p in field_params.values()
+        )
 
         for field_name, params in field_params.items():
+            print(f"DEBUG: Params for {field_name}: {params}")
             field_node = ET.SubElement(solver_node, 'DiffusionField', attrib={'Name': field_name})
             data_node = ET.SubElement(field_node, 'DiffusionData')
             
@@ -573,49 +591,6 @@ class StructureManager:
             if 'initial_expression' in params:
                 ET.SubElement(data_node, 'InitialConcentrationExpression').text = str(params['initial_expression'])
 
-            # 🟢 新增：处理 BoundaryConditions
-            if 'boundary_conditions' in params and params['boundary_conditions']:
-                bc_node = ET.SubElement(field_node, 'BoundaryConditions')
-                # 假设格式: {"X": "Periodic", "Y": "ConstantValue", ...}
-                for axis, bc_type in params['boundary_conditions'].items():
-                    plane_node = ET.SubElement(bc_node, 'Plane', attrib={'Axis': axis})
-                    # CC3D 格式通常是 <Periodic/> 或 <ConstantValue Value="0.0"/>
-                    if bc_type == "Periodic":
-                        ET.SubElement(plane_node, 'Periodic')
-                    else:
-                        ET.SubElement(plane_node, 'ConstantValue', attrib={'Value': "0.0"})
-
-            # 🟢 修正：趋化性判断 (注意大小写)
-            if 'chemotaxis' in params and params['chemotaxis']:
-                has_chemotaxis = True
-
-            # 重建 Chemotaxis 插件节点
-            if has_chemotaxis:
-                chemo_plugin = ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Chemotaxis'})
-                for field_name, params in field_params.items():
-                    # 🟢 只有当这个场确实有趋化数据时，才进入处理
-                    if 'chemotaxis' in params and params['chemotaxis']:
-                        
-                        # 2. 在这里定义 chem_field_node
-                        chem_field_node = ET.SubElement(chemo_plugin, 'ChemicalField', attrib={'Name': field_name})
-                        
-                        # 3. 处理列表或字典数据 (紧跟在定义之后，确保变量可用)
-                        data = params['chemotaxis']
-                        
-                        if isinstance(data, list):
-                            for entry in data:
-                                # 此时 chem_field_node 100% 已经关联了值
-                                ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
-                                    'Type': entry.get('CellType', 'Unknown'), # ⚠️ 检查你的 Key 名是 CellType 还是 Type
-                                    'Lambda': str(entry.get('Lambda', '0.0'))
-                                })
-                        elif isinstance(data, dict):
-                            for cell_type, lambda_val in data.items():
-                                ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
-                                    'Type': cell_type,
-                                    'Lambda': str(lambda_val)
-                                })
-
             # Secretion through python?
             py_sec = params.get('python_secretion', False)
             if py_sec:
@@ -630,6 +605,67 @@ class StructureManager:
                         sec_node = ET.SubElement(sec_data_node, 'Secretion', attrib={'Type': ct_name})
                         sec_node.text = str(rate)
 
+            # 🟢 新增：处理 BoundaryConditions
+            if 'boundary_conditions' in params and params['boundary_conditions']:
+                bc_node = ET.SubElement(field_node, 'BoundaryConditions')
+                
+                for axis, config in params['boundary_conditions'].items():
+                    plane_node = ET.SubElement(bc_node, 'Plane', attrib={'Axis': axis})
+                    bc_type = config.get('type', 'ConstantValue')
+                    print(f"DEBUG: Axis {axis} config: {config}")
+
+                    if bc_type == "Periodic":
+                        # 周期性边界不需要指定 Min/Max
+                        ET.SubElement(plane_node, 'Periodic')
+                    
+                    elif bc_type == "ConstantValue":
+                        # 固定值边界
+                        ET.SubElement(plane_node, 'ConstantValue', attrib={
+                            'PlanePosition': 'Min', 'Value': str(config.get('min_val', 0.0))
+                        })
+                        ET.SubElement(plane_node, 'ConstantValue', attrib={
+                            'PlanePosition': 'Max', 'Value': str(config.get('max_val', 0.0))
+                        })
+                        
+                    elif bc_type == "ConstantDerivative":
+                        # 固定导数（冯·诺依曼边界）
+                        ET.SubElement(plane_node, 'ConstantDerivative', attrib={
+                            'PlanePosition': 'Min', 'Value': str(config.get('min_val', 0.0))
+                        })
+                        ET.SubElement(plane_node, 'ConstantDerivative', attrib={
+                            'PlanePosition': 'Max', 'Value': str(config.get('max_val', 0.0))
+                        })
+
+        # 重建 Chemotaxis 插件节点
+        if has_chemotaxis:
+            chemo_plugin = ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Chemotaxis'})
+
+            # =========================
+            # 3. 再遍历 fields
+            # =========================
+            for field_name, params in field_params.items():
+                if 'chemotaxis' in params and params['chemotaxis']:
+
+                    chem_field_node = ET.SubElement(
+                        chemo_plugin, 'ChemicalField', attrib={'Name': field_name}
+                    )
+
+                    data = params['chemotaxis']
+
+                    if isinstance(data, list):
+                        for entry in data:
+                            ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
+                                'Type': entry.get('CellType', 'Unknown'),
+                                'Lambda': str(entry.get('Lambda', '0.0'))
+                            })
+
+                    elif isinstance(data, dict):
+                        for cell_type, lambda_val in data.items():
+                            ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
+                                'Type': cell_type,
+                                'Lambda': str(lambda_val)
+                            })
+
         # 🟢 关键：确保 Secretion Plugin 存在（用于 Python Secretor 初始化）
         # 只要有任何一个场开启了 Python Secretion，就必须有这个插件
         any_py_sec = any(p.get('python_secretion') for p in field_params.values())
@@ -638,24 +674,6 @@ class StructureManager:
                 ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Secretion'})
                 print("[SM] Added Secretion Plugin for Python support.")
 
-        # ==========================================
-        # 2. 重建 Chemotaxis 插件节点 (如果存在)
-        # ==========================================
-        if has_chemotaxis:
-            # 创建 <Plugin Name="Chemotaxis">
-            chemo_plugin = ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Chemotaxis'})
-            
-            for field_name, params in field_params.items():
-                if 'Chemotaxis' in params and params['Chemotaxis']:
-                    # 创建 <ChemicalField Name="...">
-                    chem_field_node = ET.SubElement(chemo_plugin, 'ChemicalField', attrib={'Name': field_name})
-                    
-                    # 遍历该场下的所有趋化规则 (CellType -> Lambda)
-                    for cell_type, lambda_val in params['Chemotaxis'].items():
-                        ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
-                            'Type': cell_type,
-                            'Lambda': str(lambda_val)
-                        })
 
         # ==========================================
         # 3. Secretion

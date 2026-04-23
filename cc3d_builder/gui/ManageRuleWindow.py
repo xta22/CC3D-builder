@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox, QScrollArea, QFileDialog
 )
 from PyQt5.QtCore import Qt
+from pathlib import Path
 from cc3d_builder.gui.main_editor import MainWindow
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.gui.build_model_gui import build_model_gui
@@ -209,7 +210,6 @@ class ManageRulesWindow(QWidget):
                 rule["once"] = (item.checkState() == Qt.Checked)
                 
             elif col == 7: # Custom Script Path
-                from pathlib import Path
                 raw_path = item.text().strip()
                 rule["custom_script"] = Path(raw_path).as_posix() if raw_path != "None" else "None"
                 
@@ -529,39 +529,57 @@ class ParamEditorDialog(QDialog):
         # after users click confirmation, all the key/value pairs would be packed up as dict and returned 
         return {k: v.text() for k, v in self.inputs.items()}
 
+class FieldManagerWidget(QWidget):
+    def __init__(self, registry, available_celltypes, parent=None):
+        super().__init__(parent)
+        self.registry = registry  # 核心：持有唯一的 Registry 实例
+        self.available_celltypes = available_celltypes
+        self.init_ui()
 
-class FieldInventoryWidget(QGroupBox):
-    def __init__(self, registry, on_changed_callback=None):
-        super().__init__("🧪 Field Initializer")
-        self.registry = registry
-        self.on_changed_callback = on_changed_callback
-        self.main_layout = QVBoxLayout(self)
-        self.form_layout = QFormLayout()
+    def init_ui(self):
+        layout = QVBoxLayout(self)
         
-        container = QWidget()
-        container.setLayout(self.form_layout)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(container)
-        self.main_layout.addWidget(scroll)
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Field Name", "Solver", "Diffusion Constant"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
-        self.refresh_list()
+        # 🌟 关键：连接双击事件
+        self.table.itemDoubleClicked.connect(self.on_item_double_clicked)
+        
+        layout.addWidget(self.table)
+        self.refresh_table()
 
-    def refresh_list(self):
-        while self.form_layout.count() > 0:
-            self.form_layout.takeAt(0).widget().deleteLater()
+    def refresh_table(self):
+        """从 Registry 同步最新数据到 UI 列表"""
+        all_fields = self.registry.get_all_fields() # 假设你 Registry 有这个方法
+        self.table.setRowCount(len(all_fields))
+        
+        for row, (name, params) in enumerate(all_fields.items()):
+            self.table.setItem(row, 0, QTableWidgetItem(name))
+            self.table.setItem(row, 1, QTableWidgetItem(params.get('solver', 'N/A')))
+            self.table.setItem(row, 2, QTableWidgetItem(str(params.get('diffusion_constant', '0.0'))))
 
-        for f_name, params in self.registry.field_params.items():
-            row = QWidget()
-            layout = QHBoxLayout(row)
-            cb = QCheckBox("Active")
+    def on_item_double_clicked(self, item):
+        row = item.row()
+        field_name = self.table.item(row, 0).text()
+        
+        # 1. 从 Registry 获取当前的完整数据
+        current_data = self.registry.get_field_params(field_name)
+        
+        # 2. 弹出那个已经写好的 FieldSetupDialog，并把 current_data 传进去！
+        # 🌟 注意：这里必须传入 initial_data 才能实现“回显”
+        dialog = FieldSetupDialog(
+            field_name=field_name, 
+            available_celltypes=self.available_celltypes,
+            initial_data=current_data 
+        )
+        
+        if dialog.exec_() == QDialog.Accepted:
+            new_data = dialog.get_data()
             
-            cb.setChecked(params.get("active", True)) 
-            cb.stateChanged.connect(lambda state, n=f_name: self._update_field(n, state))
-            layout.addWidget(cb)
-            self.form_layout.addRow(f"<b>{f_name}</b>:", row)
-
-    def _update_field(self, name, state):
-        self.registry.field_params[name]["active"] = (state == Qt.Checked)
-        self.registry.save()
-        if self.on_changed_callback: self.on_changed_callback()
+            # 3. 更新 Registry
+            self.registry.update_field(field_name, new_data)
+            
+            # 4. 刷新管理器列表并重新触发 XML 生成
+            self.refresh_table()
+            self.parent().trigger_xml_rebuild() # 假设父窗口负责调用 XML 生成器

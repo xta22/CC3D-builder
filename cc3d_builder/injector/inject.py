@@ -43,7 +43,6 @@ def process_and_inject_rule(project_path, registry, rule):
     legacy_fields = sm.migrate_field_data()
     for field_name, params in legacy_fields.items():
         registry.add_field_params(field_name, params)
-
     
 
     # 🌟🌟🌟 核心缺失的半步：根据当前处理的 rule，修改 Registry！🌟🌟🌟

@@ -1,5 +1,5 @@
 from cc3d.core.PySteppables import *
-from Rules_project.Simulation.core.model_registry import MODEL_REGISTRY
+from cc3d_builder.engine.core.model_registry import MODEL_REGISTRY
 
 
 class GrowthSteppable(SteppableBasePy):

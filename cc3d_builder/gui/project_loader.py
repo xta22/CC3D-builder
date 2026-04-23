@@ -68,7 +68,7 @@ class ProjectLoader(QWidget):
         
         source_path = Path(raw_path).resolve()
         
-        json_exists = (self.sandbox_dir / "rules.json").exists()
+        json_exists = (self.sandbox_dir / "Simulation" /"rules.json").exists()
         is_import = False
         
         if json_exists:

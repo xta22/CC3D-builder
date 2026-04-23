@@ -21,7 +21,7 @@ def main():
     # SANDBOX_DIR: "Rules_project" 
     pm = ProjectManager(SANDBOX_DIR)
     
-    json_exists = (SANDBOX_DIR / "rules.json").exists()
+    json_exists = (SANDBOX_DIR / "Simulation" / "rules.json").exists()
     
     if json_exists:
         print("\n⚠️  Existing rules detected in the sandbox!")

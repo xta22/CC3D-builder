@@ -40,7 +40,7 @@ class RuleEngineSteppable(SteppableBasePy):
 
     def load_rules(self):
         project_dir = Path(self.simulator.getBasePath())
-        rules_path = project_dir / "Simulation" / "config" / "rules.json"
+        rules_path = project_dir / "Simulation" / "rules.json"
         
         if not rules_path.exists():
             print(f"ℹ️ [RuleEngine] No rules.json found at {rules_path}")
