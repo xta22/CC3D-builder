@@ -292,6 +292,6 @@ def cli_add_rule(registry, sm, injector):
 
     rule = build_rule(behaviour, params)
 
-    handle_new_rule_registration(registry, rule, ask_params_cli, sm, injector)
+    handle_new_rule_registration(registry, rule, lambda m, n: ask_params_cli(m, n, registry), sm, injector)
     
     return rule

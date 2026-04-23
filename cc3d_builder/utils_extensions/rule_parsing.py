@@ -45,21 +45,26 @@ def extract_params(content):
     print(f">>> DEBUG: Regex extracted: {unique_params}")
     return unique_params
 
-
-def extract_fields_from_rule(rule):
+  
+def extract_fields_from_rule(rule: dict) -> list:
     """
     read only -- Search for field_name in rule dict
     """
     found_fields = set()
-    apply_data = rule.get("apply", {})
-    params = apply_data.get("parameters", {})
-    # single field 
-    if "release_field" in params and params["release_field"] != "None":
-        found_fields.add(params["release_field"])
-        
-    # multiple-fields
-    for f_info in params.get("fields", []):
-        if "field_name" in f_info:
-            found_fields.add(f_info["field_name"])
-            
-    return found_fields
+
+    def _search(obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                # 检查所有可能的 Key 名
+                if k in ["field_name", "regulator", "field"]:
+                    if isinstance(v, str):
+                        found_fields.add(v)
+                else:
+                    _search(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _search(item)
+
+    _search(rule)
+    # 过滤掉 CC3D 内置的场（如果有的话）
+    return list(found_fields)

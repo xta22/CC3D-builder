@@ -42,7 +42,7 @@ class MainWindow(QWidget):
         self.manage_rules_btn = QPushButton("Manage Rules (Table View)")
         self.manage_rules_btn.clicked.connect(self.open_manage_rules)
 
-        self.add_btn.clicked.connect(self.add_rule)
+        self.add_btn.clicked.connect(self.gui_add_rule)
         self.save_btn.clicked.connect(self.save)
         self.import_btn = QPushButton("Import Rules CSV")
         self.exit_btn.clicked.connect(self.close)  
@@ -205,7 +205,7 @@ class MainWindow(QWidget):
         
         return reply == QMessageBox.Yes
     
-    def add_rule(self):
+    def gui_add_rule(self):
         if not self.registry:
             return
         
@@ -216,6 +216,7 @@ class MainWindow(QWidget):
         behaviour, params = result
         rule = build_rule(behaviour, params)
         
+        '''
         new_types = extract_celltypes_from_rule(rule)
         
         if not self.confirm_rule(rule, new_types):
@@ -264,7 +265,7 @@ class MainWindow(QWidget):
                 else:
                     print(f"⚠️ User canceled field setup for {field_name}")
                     return # 如果必须要填物理参数而用户取消了，那就打断注入过程
-        
+        '''
         try:
             handle_new_rule_registration(
                 self.registry, 

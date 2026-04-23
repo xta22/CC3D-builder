@@ -2,6 +2,6 @@
    <XMLScript Type="XMLScript">Rules_project.xml</XMLScript>
    <PythonScript Type="PythonScript">wrapper_main.py</PythonScript>
    <Resource Type="Python">original_main.py</Resource>
-   <Resource Type="Python">Rules_projectSteppables.py</Resource>
-   <Resource Type="Python">../cc3d_builder/engine/rule_engine.py</Resource>
+   <Resource Type="Python">Rules_project_Steppables.py</Resource>
+   <Resource Type="Python">../cc3d_builder/engine/core/rule_engine.py</Resource>
 </Simulation>

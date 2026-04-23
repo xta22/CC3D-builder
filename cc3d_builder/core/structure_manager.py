@@ -318,8 +318,6 @@ class StructureManager:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = indent_str
 
-    # structure_manager.py
-
     def migrate_volume_data(self):
         """
         read all old data before clean
@@ -560,34 +558,85 @@ class StructureManager:
         has_chemotaxis = False
 
         for field_name, params in field_params.items():
-            # 创建 <DiffusionField Name="...">
             field_node = ET.SubElement(solver_node, 'DiffusionField', attrib={'Name': field_name})
-            
-            # 创建 <DiffusionData>
             data_node = ET.SubElement(field_node, 'DiffusionData')
             
-            # 必填项：<FieldName>
-            name_node = ET.SubElement(data_node, 'FieldName')
-            name_node.text = field_name
+            ET.SubElement(data_node, 'FieldName').text = field_name
             
-            # 可选项：扩散率、衰减率、初始表达式
-            if 'GlobalDiffusionConstant' in params:
-                diff_node = ET.SubElement(data_node, 'GlobalDiffusionConstant')
-                diff_node.text = str(params['GlobalDiffusionConstant'])
+            # 🟢 使用 Registry 里的实际 Key 名
+            if 'diffusion_constant' in params:
+                ET.SubElement(data_node, 'GlobalDiffusionConstant').text = str(params['diffusion_constant'])
                 
-            if 'GlobalDecayConstant' in params:
-                decay_node = ET.SubElement(data_node, 'GlobalDecayConstant')
-                decay_node.text = str(params['GlobalDecayConstant'])
+            if 'decay_constant' in params:
+                ET.SubElement(data_node, 'GlobalDecayConstant').text = str(params['decay_constant'])
                 
-            if 'InitialConcentrationExpression' in params:
-                init_node = ET.SubElement(data_node, 'InitialConcentrationExpression')
-                init_node.text = str(params['InitialConcentrationExpression'])
+            if 'initial_expression' in params:
+                ET.SubElement(data_node, 'InitialConcentrationExpression').text = str(params['initial_expression'])
 
-            # 检测这个场是否包含趋化性 (Chemotaxis) 设置
-            if 'Chemotaxis' in params and params['Chemotaxis']:
+            # 🟢 新增：处理 BoundaryConditions
+            if 'boundary_conditions' in params and params['boundary_conditions']:
+                bc_node = ET.SubElement(field_node, 'BoundaryConditions')
+                # 假设格式: {"X": "Periodic", "Y": "ConstantValue", ...}
+                for axis, bc_type in params['boundary_conditions'].items():
+                    plane_node = ET.SubElement(bc_node, 'Plane', attrib={'Axis': axis})
+                    # CC3D 格式通常是 <Periodic/> 或 <ConstantValue Value="0.0"/>
+                    if bc_type == "Periodic":
+                        ET.SubElement(plane_node, 'Periodic')
+                    else:
+                        ET.SubElement(plane_node, 'ConstantValue', attrib={'Value': "0.0"})
+
+            # 🟢 修正：趋化性判断 (注意大小写)
+            if 'chemotaxis' in params and params['chemotaxis']:
                 has_chemotaxis = True
 
-            # (预留位置)：如果你以后需要处理 BoundaryConditions，可以在这里继续创建节点
+            # 重建 Chemotaxis 插件节点
+            if has_chemotaxis:
+                chemo_plugin = ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Chemotaxis'})
+                for field_name, params in field_params.items():
+                    # 🟢 只有当这个场确实有趋化数据时，才进入处理
+                    if 'chemotaxis' in params and params['chemotaxis']:
+                        
+                        # 2. 在这里定义 chem_field_node
+                        chem_field_node = ET.SubElement(chemo_plugin, 'ChemicalField', attrib={'Name': field_name})
+                        
+                        # 3. 处理列表或字典数据 (紧跟在定义之后，确保变量可用)
+                        data = params['chemotaxis']
+                        
+                        if isinstance(data, list):
+                            for entry in data:
+                                # 此时 chem_field_node 100% 已经关联了值
+                                ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
+                                    'Type': entry.get('CellType', 'Unknown'), # ⚠️ 检查你的 Key 名是 CellType 还是 Type
+                                    'Lambda': str(entry.get('Lambda', '0.0'))
+                                })
+                        elif isinstance(data, dict):
+                            for cell_type, lambda_val in data.items():
+                                ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib={
+                                    'Type': cell_type,
+                                    'Lambda': str(lambda_val)
+                                })
+
+            # Secretion through python?
+            py_sec = params.get('python_secretion', False)
+            if py_sec:
+            # 如果是 Python 控制，XML 里的 DiffusionField 内部不写 SecretionData
+            # 这样就相当于你说的 "删掉/Comment out"
+                print(f"[SM] {field_name} uses Python secretion. Skipping XML SecretionData.")
+            else:
+                # 如果不是 Python 控制，则按原样写入 XML SecretionData
+                if 'SecretionData' in params:
+                    sec_data_node = ET.SubElement(field_node, 'SecretionData')
+                    for ct_name, rate in params['SecretionData'].items():
+                        sec_node = ET.SubElement(sec_data_node, 'Secretion', attrib={'Type': ct_name})
+                        sec_node.text = str(rate)
+
+        # 🟢 关键：确保 Secretion Plugin 存在（用于 Python Secretor 初始化）
+        # 只要有任何一个场开启了 Python Secretion，就必须有这个插件
+        any_py_sec = any(p.get('python_secretion') for p in field_params.values())
+        if any_py_sec:
+            if self.root.find(".//Plugin[@Name='Secretion']") is None:
+                ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Secretion'})
+                print("[SM] Added Secretion Plugin for Python support.")
 
         # ==========================================
         # 2. 重建 Chemotaxis 插件节点 (如果存在)
@@ -608,4 +657,7 @@ class StructureManager:
                             'Lambda': str(lambda_val)
                         })
 
-        # （预留位置）：同理，如果以后 Registry 里加了 Secretion，可以在这里按需生成 Secretion 节点。
+        # ==========================================
+        # 3. Secretion
+        # ==========================================
+                

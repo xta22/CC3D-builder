@@ -528,3 +528,40 @@ class ParamEditorDialog(QDialog):
     def get_final_params(self):
         # after users click confirmation, all the key/value pairs would be packed up as dict and returned 
         return {k: v.text() for k, v in self.inputs.items()}
+
+
+class FieldInventoryWidget(QGroupBox):
+    def __init__(self, registry, on_changed_callback=None):
+        super().__init__("🧪 Field Initializer")
+        self.registry = registry
+        self.on_changed_callback = on_changed_callback
+        self.main_layout = QVBoxLayout(self)
+        self.form_layout = QFormLayout()
+        
+        container = QWidget()
+        container.setLayout(self.form_layout)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(container)
+        self.main_layout.addWidget(scroll)
+        
+        self.refresh_list()
+
+    def refresh_list(self):
+        while self.form_layout.count() > 0:
+            self.form_layout.takeAt(0).widget().deleteLater()
+
+        for f_name, params in self.registry.field_params.items():
+            row = QWidget()
+            layout = QHBoxLayout(row)
+            cb = QCheckBox("Active")
+            
+            cb.setChecked(params.get("active", True)) 
+            cb.stateChanged.connect(lambda state, n=f_name: self._update_field(n, state))
+            layout.addWidget(cb)
+            self.form_layout.addRow(f"<b>{f_name}</b>:", row)
+
+    def _update_field(self, name, state):
+        self.registry.field_params[name]["active"] = (state == Qt.Checked)
+        self.registry.save()
+        if self.on_changed_callback: self.on_changed_callback()

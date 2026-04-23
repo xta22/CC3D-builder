@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 import sys
 
-def ask_params_cli(mode, name):
+def ask_params_cli(mode, name, registry = None):
     """ CLI entry """
     if mode == "celltype":
         v = float(input(f"\n[New Type: {name}] Target Volume [50]: ") or 50)
@@ -24,6 +24,8 @@ def ask_params_cli(mode, name):
             app = QApplication(sys.argv) # ??? 
 
         available_cells = [] # compatibility ??
+        if registry:
+            available_cells = list(registry.celltype_params.keys())
         dialog = FieldSetupDialog(name, available_cells)
         
         # 3. 运行对话框
@@ -100,18 +102,29 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
     new_fields = extract_fields_from_rule(rule)
     print(f"DEBUG: Detected fields in this rule: {new_fields}") 
     for f_name in new_fields:
+        print(f"CRITICAL DEBUG: Registry currently thinks these cells exist: {list(registry.celltype_params.keys())}")
         if f_name not in registry.field_params:
             if sm.ensure_field(f_name):
                 params = input_handler("field", f_name)
                 if params:
-                    sm.update_field_params(f_name, params['GlobalDiffusionConstant'], params['GlobalDecayConstant'])
-                    injector.ensure_field_start_code(f_name)
-                    registry.add_field_params(f_name)
-                    
+                    registry.add_field_params(f_name, params)
+                    if params.get('python_secretion'):
+                        auto_rule = {
+                            "id": f"python_secretion_{f_name}",
+                            "behaviour": "secretion", 
+                            "target": "specified_in_python", 
+                            "apply": {
+                                "field": f_name,
+                                "mode": "python_managed"
+                            }
+                        }
+                        if auto_rule not in registry.rules:
+                            registry.rules.append(auto_rule)
+                            print(f"[Registry] Auto-registered Python secretion rule for {f_name}")
     registry.rules.append(rule)
 
-    # from cc3d_builder.injector.inject import process_and_inject_rule
-    # process_and_inject_rule(registry.project_path, registry, rule)
+    from cc3d_builder.injector.inject import process_and_inject_rule
+    process_and_inject_rule(registry.project_path, registry, rule)
 
 
 def process_custom_script(file_path, registry, ask_params_func, extract_params_func=None, existing_params=None):

@@ -9,7 +9,7 @@ BUILDER_ROOT = CURRENT_FILE.parents[1]
 
 from cc3d_builder.core.structure_manager import StructureManager
 from cc3d_builder.injector.steppable_injector import SteppableInjector
-from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule
+from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
 
 
 def process_and_inject_rule(project_path, registry, rule):
@@ -43,6 +43,8 @@ def process_and_inject_rule(project_path, registry, rule):
     legacy_fields = sm.migrate_field_data()
     for field_name, params in legacy_fields.items():
         registry.add_field_params(field_name, params)
+
+    
 
     # 🌟🌟🌟 核心缺失的半步：根据当前处理的 rule，修改 Registry！🌟🌟🌟
     # 假设你的 rule 有趋化或者分泌的逻辑，在这里更新 registry.field_params
