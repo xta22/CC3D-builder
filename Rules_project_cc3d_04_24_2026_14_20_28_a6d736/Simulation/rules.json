@@ -1,0 +1,101 @@
+{
+  "rules": [
+    {
+      "id": "1",
+      "target": null,
+      "behaviour": "create",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 1.0,
+              "field_name": "Substrate"
+            }
+          },
+          "apply": {
+            "cell_type": "CellB",
+            "count": 1,
+            "distribution": {
+              "type": "random"
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "2",
+      "target": "CellA",
+      "behaviour": "differentiate",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 1.0,
+              "field_name": "Substrate"
+            }
+          },
+          "apply": {
+            "mode": "type_switch",
+            "new_type": "CellC"
+          }
+        }
+      ],
+      "once": true,
+      "debug": false,
+      "triggered": false
+    }
+  ],
+  "celltype_params": {
+    "Cell": {
+      "should_initialize": true,
+      "initial_count": 5,
+      "targetVolume": 100.0,
+      "lambdaVolume": 10.0
+    },
+    "CellA": {
+      "should_initialize": true,
+      "initial_count": 5,
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
+    },
+    "CellB": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
+    },
+    "CellC": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
+    }
+  },
+  "field_params": {
+    "Oxygen": {
+      "solver": "DiffusionSolverFE",
+      "diffusion_constant": 0.9,
+      "decay_constant": 1e-05,
+      "initial_expression": "x/100",
+      "boundary_conditions": {},
+      "chemotaxis": {
+        "Cell": 1000.0
+      },
+      "python_secretion": false
+    },
+    "Substrate": {
+      "solver": "DiffusionSolverFE",
+      "diffusion_constant": 0.9,
+      "decay_constant": 1e-05,
+      "initial_expression": "0.0",
+      "boundary_conditions": {},
+      "chemotaxis": {
+        "CellA": 800.0
+      },
+      "python_secretion": false
+    }
+  }
+}

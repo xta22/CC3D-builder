@@ -176,6 +176,7 @@ class SimulationRegistry:
             return
 
         xml_names = self.sm.get_xml_cell_types()
+        xml_fields = self.sm.get_all_fields_from_xml()
         modified = False
         for name in xml_names:
             if name not in self.celltype_params:
@@ -187,28 +188,55 @@ class SimulationRegistry:
                     "lambdaVolume": 2.0
                 }
                 modified = True
+
+        for f_name, params in xml_fields.items():
+        # 如果 registry 内存里还没这个场，或者你想以 XML 为准
+            self.field_params[f_name] = params
         
         if modified:
             self.save() 
 
 
     def add_field_params(self, field_name, params):
-        """
-        params 是从 FieldSetupDialog.get_data() 获取的那个巨大的字典
-        """
-        if not hasattr(self, 'field_params'):
-            self.field_params = {}
+        # 统一转换函数：不管传进来是大写还是小写，都存成小写
+        def get_val(keys, default):
+            for k in keys:
+                if k in params: return params[k]
+            return default
 
-        # 直接存储整个结构化字典，这样以后 XML 导出时可以拿到所有细节（包括边界条件和趋化）
-        self.field_params[field_name] = {
-            "solver": params.get("Solver", "DiffusionSolverFE"),
-            "diffusion_constant": params.get("GlobalDiffusionConstant", 0.1),
-            "decay_constant": params.get("GlobalDecayConstant", 0.001),
-            "initial_expression": params.get("InitialConcentrationExpression", "0.0"),
-            "boundary_conditions": params.get("BoundaryConditions", {}),
-            "chemotaxis": params.get("Chemotaxis", []),
-            "python_secretion": params.get("ControlSecretionPython", False)
+        # 强制归一化存储
+        normalized = {
+            "solver": get_val(["solver", "Solver"], "DiffusionSolverFE"),
+            "diffusion_constant": get_val(["diffusion_constant", "GlobalDiffusionConstant"], 0.1),
+            "decay_constant": get_val(["decay_constant", "GlobalDecayConstant"], 0.001),
+            "initial_expression": get_val(["initial_expression", "InitialConcentrationExpression"], "0.0"),
+            "boundary_conditions": get_val(["boundary_conditions", "BoundaryConditions"], {}),
+            "chemotaxis": get_val(["chemotaxis", "Chemotaxis"], [])
         }
-        
-        print(f"✅ Registry updated for field: {field_name}")
-        self.save() # 存入 rules.json
+
+        # 🛡️ 关键防线：如果新 params 里没 BC（比如是空的），但 Registry 里旧的有，一定要保留！
+        if not normalized["boundary_conditions"] and field_name in self.field_params:
+            normalized["boundary_conditions"] = self.field_params[field_name].get("boundary_conditions", {})
+
+        self.field_params[field_name] = normalized
+        self.save()
+
+    # 在 SimulationRegistry 类内部添加：
+
+    def get_all_fields(self):
+        """返回所有场的字典 {field_name: params_dict}"""
+        # 假设你的 Registry 里存储场数据的变量名是 self.field_params
+        print(f"DEBUG: Current field_params in registry: {self.field_params}")
+        return self.field_params
+
+    def get_field_params(self, field_name):
+        """根据名称获取单个场的配置参数"""
+        return self.field_params.get(field_name, {})
+
+    def update_field(self, field_name, new_data):
+        """更新某个场的配置数据"""
+        if field_name in self.field_params:
+            self.field_params[field_name].update(new_data)
+        else:
+            self.field_params[field_name] = new_data
+        self.save() # 别忘了更新完存一下 JSON

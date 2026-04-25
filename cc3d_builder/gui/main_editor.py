@@ -216,56 +216,6 @@ class MainWindow(QWidget):
         behaviour, params = result
         rule = build_rule(behaviour, params)
         
-        '''
-        new_types = extract_celltypes_from_rule(rule)
-        
-        if not self.confirm_rule(rule, new_types):
-            return
-
-        existing_ids = {r["id"] for r in self.registry.rules}
-        if params["id"] in existing_ids:
-            reply = QMessageBox.question(
-                self, "Overwrite?",
-                f"Rule ID {params['id']} already exists.\nOverwrite?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-            )
-            if reply == QMessageBox.No:
-                return
-            self.registry.rules = [r for r in self.registry.rules if r["id"] != params["id"]]
-
-        new_fields = extract_fields_from_rule(rule)
-        for field_name in new_fields:
-            if field_name not in self.registry.field_params:
-                
-                # 拿到当前已经注册的细胞类型列表，传给弹窗，供趋化性下拉框使用
-                available_cells = list(self.registry.celltype_params.keys())
-                
-                # 呼叫我们的终极弹窗！
-                dialog = FieldSetupDialog(field_name, available_cells, self)
-                
-                if dialog.exec_() == QDialog.Accepted:
-                    # 拿到组装好的终极字典
-                    field_params = dialog.get_data()
-                    
-                    # 是否需要自动添加 Secretion Rule?
-                    if field_params.pop("ControlSecretionPython", False):
-                        # 自动生成联动规则
-                        secrete_rule = {
-                            "id": f"auto_secrete_{field_name}",
-                            "behaviour": "secrete",
-                            "target": "global",
-                            "apply": {"field": field_name, "rate": 0.1}
-                        }
-                        self.registry.add_rule(secrete_rule)
-                        print(f"✅ Auto-generated secretion rule for {field_name}")
-
-                    # 写入 Registry (这样底层 ensure_xml 就能完美读取了)
-                    self.registry.add_field_params(field_name, field_params)
-                    
-                else:
-                    print(f"⚠️ User canceled field setup for {field_name}")
-                    return # 如果必须要填物理参数而用户取消了，那就打断注入过程
-        '''
         try:
             handle_new_rule_registration(
                 self.registry, 
@@ -609,6 +559,10 @@ class MainWindow(QWidget):
                                             ask_func=lambda m, n: ask_params_gui(m, n, self),
                                             main_editor=self
                                             )
+        
+        if hasattr(self.manage_win, 'field_manager'):
+            self.manage_win.field_manager.refresh_table()
+            print("✅ Force refreshed field manager from MainWindow")
         self.manage_win.show()
 
     def build_condition_gui(self):

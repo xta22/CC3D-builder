@@ -2,28 +2,31 @@
   "rules": [
     {
       "id": "1",
-      "target": "CellA",
-      "behaviour": "create",
+      "target": "",
+      "behaviour": "growth",
       "cases": [
         {
           "when": {
             "condition_type": "Environment",
             "params": {
               "operator": ">",
-              "threshold": 30.0,
-              "field_name": "Substrate2"
+              "threshold": 0.0,
+              "field_name": ""
             }
           },
           "apply": {
-            "cell_type": "CellA",
-            "count": 10,
-            "distribution": {
-              "type": "random"
+            "model": "hill",
+            "regulator": "S",
+            "parameters": {
+              "y_max": 1.0,
+              "y_min": 0.0,
+              "K": 0.5,
+              "n": 2.0
             }
           }
         }
       ],
-      "once": true,
+      "once": false,
       "debug": false,
       "triggered": false
     }
@@ -40,66 +43,54 @@
       "initial_count": 5,
       "targetVolume": 50.0,
       "lambdaVolume": 2.0
-    },
-    "CellB": {
-      "targetVolume": 50.0,
-      "lambdaVolume": 10.0
     }
   },
   "field_params": {
-    "Substrate": {
-      "solver": "DiffusionSolverFE",
-      "diffusion_constant": 0.1,
-      "decay_constant": 1e-05,
-      "initial_expression": "0.0",
-      "boundary_conditions": {},
-      "chemotaxis": {
-        "CellA": 100.0
-      },
-      "python_secretion": false
-    },
     "Oxygen": {
       "solver": "DiffusionSolverFE",
       "diffusion_constant": 0.9,
       "decay_constant": 1e-05,
       "initial_expression": "x/100",
-      "boundary_conditions": {},
-      "chemotaxis": {
-        "Cell": 1000.0
-      },
-      "python_secretion": false
-    },
-    "Substrate2": {
-      "solver": "DiffusionSolverFE",
-      "diffusion_constant": 0.1,
-      "decay_constant": 1e-05,
-      "initial_expression": "0.0",
       "boundary_conditions": {
         "X": {
           "type": "ConstantValue",
-          "min_val": 100.0,
-          "max_val": 0.0
+          "min_val": 0.0,
+          "max_val": 1.0
         },
         "Y": {
-          "type": "Periodic",
+          "type": "ConstantDerivative",
           "min_val": 0.0,
           "max_val": 0.0
+        }
+      },
+      "chemotaxis": {
+        "Cell": 1000.0
+      }
+    },
+    "S": {
+      "solver": "DiffusionSolverFE",
+      "diffusion_constant": 0.5,
+      "decay_constant": 0.0001,
+      "initial_expression": "0.0",
+      "boundary_conditions": {
+        "X": {
+          "type": "Periodic"
+        },
+        "Y": {
+          "type": "Periodic"
         },
         "Z": {
-          "type": "Periodic",
-          "min_val": 0.0,
-          "max_val": 0.0
+          "type": "Periodic"
         }
       },
       "chemotaxis": [
         {
-          "CellType": "CellA",
-          "Lambda": 200.0,
-          "Type": "regular",
-          "SatCoef": 0.0
+          "cell_type": "CellA",
+          "lambda": 100.0,
+          "mode": "saturation",
+          "sat_coef": 2.0
         }
-      ],
-      "python_secretion": false
+      ]
     }
   }
 }

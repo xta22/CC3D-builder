@@ -13,7 +13,6 @@
         <CellType TypeId="0" TypeName="Medium"></CellType>
         <CellType TypeId="1" TypeName="Cell"></CellType>
         <CellType TypeName="CellA" TypeId="2"></CellType>
-        <CellType TypeName="CellB" TypeId="3"></CellType>
     </Plugin>
     <Plugin Name="CenterOfMass">
    </Plugin>
@@ -29,43 +28,24 @@
         <Energy Type1="CellA" Type2="Medium">10.0</Energy>
         <Energy Type1="Cell" Type2="CellA">10.0</Energy>
         <Energy Type1="CellA" Type2="CellA">10.0</Energy>
-        <Energy Type1="CellB" Type2="Medium">10.0</Energy>
-        <Energy Type1="Cell" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellA" Type2="CellB">10.0</Energy>
-        <Energy Type1="CellB" Type2="CellB">10.0</Energy>
     </Plugin>
     <Steppable Type="UniformInitializer">
         <Region>
-            <BoxMin x="94" y="264" z="0"></BoxMin>
-            <BoxMax x="107" y="277" z="1"></BoxMax>
+            <BoxMin x="252" y="149" z="0"></BoxMin>
+            <BoxMax x="265" y="162" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>Cell</Types>
         </Region>
         <Region>
-            <BoxMin x="287" y="130" z="0"></BoxMin>
-            <BoxMax x="300" y="143" z="1"></BoxMax>
+            <BoxMin x="23" y="158" z="0"></BoxMin>
+            <BoxMax x="36" y="171" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>CellA</Types>
         </Region>
-        <Region>
-            <BoxMin x="262" y="75" z="0"></BoxMin>
-            <BoxMax x="275" y="88" z="1"></BoxMax>
-            <Gap>0</Gap>
-            <Width>5</Width>
-            <Types>CellB</Types>
-        </Region>
     </Steppable>
     <Steppable Type="DiffusionSolverFE">
-        <DiffusionField Name="Substrate">
-            <DiffusionData>
-                <FieldName>Substrate</FieldName>
-                <GlobalDiffusionConstant>0.1</GlobalDiffusionConstant>
-                <GlobalDecayConstant>1e-05</GlobalDecayConstant>
-                <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
-            </DiffusionData>
-        </DiffusionField>
         <DiffusionField Name="Oxygen">
             <DiffusionData>
                 <FieldName>Oxygen</FieldName>
@@ -73,18 +53,27 @@
                 <GlobalDecayConstant>1e-05</GlobalDecayConstant>
                 <InitialConcentrationExpression>x/100</InitialConcentrationExpression>
             </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantValue PlanePosition="Min" Value="0.0"></ConstantValue>
+                    <ConstantValue PlanePosition="Max" Value="1.0"></ConstantValue>
+                </Plane>
+                <Plane Axis="Y">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
         </DiffusionField>
-        <DiffusionField Name="Substrate2">
+        <DiffusionField Name="S">
             <DiffusionData>
-                <FieldName>Substrate2</FieldName>
-                <GlobalDiffusionConstant>0.1</GlobalDiffusionConstant>
-                <GlobalDecayConstant>1e-05</GlobalDecayConstant>
+                <FieldName>S</FieldName>
+                <GlobalDiffusionConstant>0.5</GlobalDiffusionConstant>
+                <GlobalDecayConstant>0.0001</GlobalDecayConstant>
                 <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
             </DiffusionData>
             <BoundaryConditions>
                 <Plane Axis="X">
-                    <ConstantValue PlanePosition="Min" Value="100.0"></ConstantValue>
-                    <ConstantValue PlanePosition="Max" Value="0.0"></ConstantValue>
+                    <Periodic></Periodic>
                 </Plane>
                 <Plane Axis="Y">
                     <Periodic></Periodic>
@@ -96,14 +85,9 @@
         </DiffusionField>
     </Steppable>
     <Plugin Name="Chemotaxis">
-        <ChemicalField Name="Substrate">
-            <ChemotaxisByType Type="CellA" Lambda="100.0"></ChemotaxisByType>
-        </ChemicalField>
-        <ChemicalField Name="Oxygen">
-            <ChemotaxisByType Type="Cell" Lambda="1000.0"></ChemotaxisByType>
-        </ChemicalField>
-        <ChemicalField Name="Substrate2">
-            <ChemotaxisByType Type="CellA" Lambda="200.0"></ChemotaxisByType>
+        <ChemicalField Name="Oxygen"></ChemicalField>
+        <ChemicalField Name="S">
+            <ChemotaxisByType Type="CellA" Lambda="100.0" SaturationCoef="2.0"></ChemotaxisByType>
         </ChemicalField>
     </Plugin>
 </CompuCell3D>

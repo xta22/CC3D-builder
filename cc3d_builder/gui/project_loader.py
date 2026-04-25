@@ -102,20 +102,23 @@ class ProjectLoader(QWidget):
             self.registry = SimulationRegistry(self.sandbox_dir, structure_manager=sm)
             
             self.registry.load() # here file would have rules.json
-
+            print(f"DEBUG: Registry field_params after load: {self.registry.field_params}")
+            
             self.main_window = MainWindow(
                 registry=self.registry, 
                 sm=sm, 
                 injector=injector
             )
+
+            # force refreshing field
+            if hasattr(self.main_window, 'field_manager'):
+                self.main_window.field_manager.refresh_table()
             self.main_window.show()
             self.close()
 
         except Exception as e:
             traceback.print_exc()
             QMessageBox.critical(self, "Load Failed", f"Error:\n{str(e)}")
-
-
 
 
 if __name__ == "__main__":

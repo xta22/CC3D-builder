@@ -66,7 +66,7 @@ def ask_params_gui(mode, name, parent):
     elif mode == "field":
         available_cells = list(parent.registry.celltype_params.keys())
         from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
-        dialog = FieldSetupDialog(name, available_cells, parent)
+        dialog = FieldSetupDialog(name, available_cells, None, parent)
         
         if dialog.exec_() == QDialog.Accepted:
             field_params = dialog.get_data()
@@ -94,7 +94,7 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
     new_types = extract_celltypes_from_rule(rule)
     for ct in new_types:
         if ct not in registry.celltype_params:
-            params_ct = input_handler("celltype", ct)
+            params_ct = input_handler("celltype", ct, None)
             if params_ct:
                 injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
                 registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
@@ -105,9 +105,10 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
         print(f"CRITICAL DEBUG: Registry currently thinks these cells exist: {list(registry.celltype_params.keys())}")
         if f_name not in registry.field_params:
             if sm.ensure_field(f_name):
-                params = input_handler("field", f_name)
+                params = input_handler("field", f_name, None)
                 if params:
                     registry.add_field_params(f_name, params)
+                    print(f"✅ SUCCESSFULLY ADDED {f_name} TO REGISTRY.")
                     if params.get('python_secretion'):
                         auto_rule = {
                             "id": f"python_secretion_{f_name}",
@@ -121,8 +122,11 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
                         if auto_rule not in registry.rules:
                             registry.rules.append(auto_rule)
                             print(f"[Registry] Auto-registered Python secretion rule for {f_name}")
-    registry.rules.append(rule)
 
+            else:
+                print(f"ℹ️ Field {f_name} already exists in registry, skipping config.")
+    registry.rules.append(rule)
+    print(f"🚩 REGISTRY CONTENT NOW: {registry.get_all_fields()}")
     from cc3d_builder.injector.inject import process_and_inject_rule
     process_and_inject_rule(registry.project_path, registry, rule)
 
