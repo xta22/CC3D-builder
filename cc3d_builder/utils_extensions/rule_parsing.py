@@ -55,7 +55,6 @@ def extract_fields_from_rule(rule: dict) -> list:
     def _search(obj):
         if isinstance(obj, dict):
             for k, v in obj.items():
-                # 检查所有可能的 Key 名
                 if k in ["field_name", "regulator", "field"]:
                     if isinstance(v, str):
                         found_fields.add(v)
@@ -66,5 +65,5 @@ def extract_fields_from_rule(rule: dict) -> list:
                 _search(item)
 
     _search(rule)
-    # 过滤掉 CC3D 内置的场（如果有的话）
+    # filter the built-in field ???
     return list(found_fields)

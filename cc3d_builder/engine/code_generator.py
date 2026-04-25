@@ -1,75 +1,131 @@
 import json
 from pathlib import Path
 
-class CC3DAdvancedGenerator:
+class CC3DDecompiledGenerator:
     def __init__(self, registry):
         self.registry = registry
-        # 获取最新的 rules
-        self.rules = registry.rules 
+        self.rules = registry.rules
 
     def generate(self):
+        # Automatically determine the parent class.
+        has_create = any(r.get('behaviour') == 'create' for r in self.rules)
+        base_class = "MitosisSteppableBase" if has_create else "SteppableBasePy"
+
         code = [
             "from cc3d.core.PySteppables import *",
-            "from cc3d_builder.engine.core.model_registry import MODEL_REGISTRY",
-            "from cc3d_builder.engine.core.condition_evaluator import evaluate_condition",
-            "import json\n",
-            "# 🚀 HIGH-PERFORMANCE COMPILED STEPPABLE",
-            "class CompiledRuleSteppable(SteppableBasePy):",
+            "import numpy as np",
+            "import math",
+            "import random",
+            "",
+            f"class SimulationSteppable({base_class}):",
+            "    def __init__(self, frequency=1):",
+            f"        {base_class}.__init__(self, frequency)",
+            "",
             "    def step(self, mcs):"
         ]
 
-        # 遍历所有 Rule 并编译
+        if has_create:
+            code.append("        cells_to_divide = []")
+
+        # Compile each rule into native code.
         for rule in self.rules:
-            code.append(self._compile_rule(rule))
+            code.extend(self._compile_rule(rule))
+
+        # Handle splitting logic
+        if has_create:
+            code.extend([
+                "        for cell in cells_to_divide:",
+                "            self.divide_cell_random_orientation(cell)",
+                "",
+                "    def update_attributes(self):",
+                "        self.parent_cell.targetVolume /= 2.0",
+                "        self.clone_parent_2_child()"
+            ])
 
         return "\n".join(code)
 
     def _compile_rule(self, rule):
-        r_id = rule.get('id', 'unknown')
+        target = rule.get('target', 'All').upper()
         behaviour = rule.get('behaviour')
-        target_type = rule.get('target', 'All').upper()
-        
         indent = "        "
-        rule_lines = [f"\n{indent}# --- Rule: {r_id} ---"]
         
-        # 编译循环头部
-        if target_type == "ALL":
-            rule_lines.append(f"{indent}for cell in self.cell_list:")
+        lines = [f"\n{indent}# --- Rule {rule.get('id')}: {behaviour} ---"]
+        
+        if target == 'ALL':
+            lines.append(f"{indent}for cell in self.cell_list:")
         else:
-            rule_lines.append(f"{indent}for cell in self.cell_list_by_type(self.{target_type}):")
+            lines.append(f"{indent}for cell in self.cell_list_by_type(self.{target}):")
         
         curr_indent = indent + "    "
-
-        # 编译每一个 Case
-        for i, case in enumerate(rule.get('cases', [])):
-            when_block = case.get('when', {})
-            apply_block = case.get('apply', {})
+        for case in rule.get('cases', []):
+            # Translate the Condition directly into an if statement.
+            cond_expr = self._decompile_condition(case.get('when', {}))
+            lines.append(f"{curr_indent}if {cond_expr}:")
             
-            # 1. 编译条件 (Condition)
-            # 这里我们依然可以调用 evaluate_condition，但我们传入的是预解析的 JSON
-            cond_json = json.dumps(when_block)
-            rule_lines.append(f"{curr_indent}if evaluate_condition({cond_json}, cell, self):")
-            
-            # 2. 编译行为逻辑 (Behaviour Logic)
+            # Translate the Action directly into underlying API calls.
             exec_indent = curr_indent + "    "
+            apply = case.get('apply', {})
+            
             if behaviour == "growth":
-                # 模拟你的 growth_plugin.py 逻辑，但跳过 cell.dict 中转
-                model_name = apply_block.get("model")
-                apply_json = json.dumps(apply_block)
-                
-                rule_lines.append(f"{exec_indent}# Direct Growth Application")
-                rule_lines.append(f"{exec_indent}params = {apply_json}")
-                rule_lines.append(f"{exec_indent}model_fn = MODEL_REGISTRY.get('{model_name}')")
-                rule_lines.append(f"{exec_indent}if model_fn:")
-                rule_lines.append(f"{exec_indent}    cell.targetVolume += model_fn(params, cell, self)")
+                # Hardcode the model logic directly into the code, without referencing MODEL_REGISTRY
+                math_logic = self._decompile_growth(apply)
+                lines.append(f"{exec_indent}# Applied {apply.get('model')} growth model")
+                lines.append(f"{exec_indent}cell.targetVolume += {math_logic}")
             
             elif behaviour == "differentiate":
-                to_type = apply_block.get("to_type", "Medium").upper()
-                rule_lines.append(f"{exec_indent}cell.type = self.{to_type}")
+                to_type = apply.get('to_type', 'Medium').upper()
+                lines.append(f"{exec_indent}cell.type = self.{to_type}")
+            
+            elif behaviour == "create":
+                lines.append(f"{exec_indent}cells_to_divide.append(cell)")
+                
+        return lines
 
-        return "\n".join(rule_lines)
+    def _decompile_condition(self, when):
+        """Expand the logic of condition_evaluator into native Python."""
+        c_type = when.get('condition_type')
+        p = when.get('params', {})
+        
+        if c_type == "Environment":
+            field = p.get('field_name')
+            op = p.get('operator', '>')
+            thr = p.get('threshold', 0)
+            # visit field through self.field
+            return f"self.field.{field}[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)] {op} {thr}"
+        
+        if c_type.startswith("Morphology"):
+            attr = c_type.split('_')[1].lower() if '_' in c_type else 'volume'
+            op = p.get('operator', '>')
+            thr = p.get('threshold', 0)
+            return f"cell.{attr} {op} {thr}"
 
-    def save_to_file(self, output_dir):
-        path = Path(output_dir) / "CompiledSteppable.py"
-        path.write_text(self.generate(), encoding='utf-8')
-        return path
+        if c_type == "Logic_AND":
+            subs = [self._decompile_condition(c) for c in p.get('conditions', [])]
+            return f"({' and '.join(subs)})"
+
+        return "True"
+
+    def _decompile_growth(self, apply):
+        """Expand the logic of model_registry into mathematical expressions."""
+        model = apply.get('model')
+        p = apply.get('parameters', {})
+        reg = apply.get('regulator')
+        
+        # 场采样表达式
+        reg_val = f"self.field.{reg}[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]" if reg else "1.0"
+
+        if model == "linear":
+            return f"{p.get('alpha', 1.0)} * {reg_val}"
+        
+        if model == "hill":
+            # 展开 Hill 公式：y_max * (S^n / (K^n + S^n))
+            y_max = p.get('y_max', 1.0)
+            K = p.get('K', 0.5)
+            n = p.get('n', 2.0)
+            return f"{y_max} * (({reg_val}**{n}) / ({K}**{n} + {reg_val}**{n}))"
+        
+        return "0.1"
+
+    def save_to_file(self, folder_path):
+        p = Path(folder_path) / "DecompiledSteppables.py"
+        p.write_text(self.generate(), encoding='utf-8')

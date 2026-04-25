@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 from cc3d_builder.core.structure_manager import StructureManager
-from cc3d_builder.engine.code_generator import CC3DAdvancedGenerator
+from cc3d_builder.engine.code_generator import CC3DDecompiledGenerator
 
 class SimulationRegistry:
 
@@ -14,7 +14,6 @@ class SimulationRegistry:
         self.rules_path = self.project_path / "Simulation" /"rules.json"
         self.xml_path = self.project_path / "Simulation" /"Rules_project.xml"
         self.py_path    = self.project_path / "Simulation" /"Rules_project_Steppables.py"
-        # 暂时没用但是还是写着了
         self.rules = []
         self.cell_index = {}
         self.behaviour_index = {}
@@ -122,8 +121,7 @@ class SimulationRegistry:
             }, f, indent=2)
 
         try:
-            generator = CC3DAdvancedGenerator(self)
-            # 生成到 Simulation 文件夹下
+            generator = CC3DDecompiledGenerator(self)
             generator.save_to_file(self.project_path / "Simulation")
             print("🚀 [Generator] Steppables.py has been re-compiled.")
         except Exception as e:
@@ -198,7 +196,7 @@ class SimulationRegistry:
                 modified = True
 
         for f_name, params in xml_fields.items():
-        # 如果 registry 内存里还没这个场，或者你想以 XML 为准
+        # If this field is not yet present in the registry memory, use the XML as the source of truth first
             self.field_params[f_name] = params
         
         if modified:
@@ -206,13 +204,12 @@ class SimulationRegistry:
 
 
     def add_field_params(self, field_name, params):
-        # 统一转换函数：不管传进来是大写还是小写，都存成小写
+        # Unified conversion function
         def get_val(keys, default):
             for k in keys:
                 if k in params: return params[k]
             return default
 
-        # 强制归一化存储
         normalized = {
             "solver": get_val(["solver", "Solver"], "DiffusionSolverFE"),
             "diffusion_constant": get_val(["diffusion_constant", "GlobalDiffusionConstant"], 0.1),
@@ -222,29 +219,26 @@ class SimulationRegistry:
             "chemotaxis": get_val(["chemotaxis", "Chemotaxis"], [])
         }
 
-        # 🛡️ 关键防线：如果新 params 里没 BC（比如是空的），但 Registry 里旧的有，一定要保留！
+        # If the new parameters don’t include BC but the Registry already has it, it must be preserved!
         if not normalized["boundary_conditions"] and field_name in self.field_params:
             normalized["boundary_conditions"] = self.field_params[field_name].get("boundary_conditions", {})
 
         self.field_params[field_name] = normalized
         self.save()
 
-    # 在 SimulationRegistry 类内部添加：
-
     def get_all_fields(self):
-        """返回所有场的字典 {field_name: params_dict}"""
-        # 假设你的 Registry 里存储场数据的变量名是 self.field_params
+        """Return a dictionary of all fields {field_name: params_dict}"""
         print(f"DEBUG: Current field_params in registry: {self.field_params}")
         return self.field_params
 
     def get_field_params(self, field_name):
-        """根据名称获取单个场的配置参数"""
+        """Retrieve the configuration parameters of a single field by name."""
         return self.field_params.get(field_name, {})
 
     def update_field(self, field_name, new_data):
-        """更新某个场的配置数据"""
+        """Update the configuration data of a specific field."""
         if field_name in self.field_params:
             self.field_params[field_name].update(new_data)
         else:
             self.field_params[field_name] = new_data
-        self.save() # 别忘了更新完存一下 JSON
+        self.save() 

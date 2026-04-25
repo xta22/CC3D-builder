@@ -33,18 +33,7 @@ def ask_params_cli(mode, name, registry = None):
             result = dialog.get_data()
             print(f"✅ Configuration received from GUI.")
             return result
-        '''
-        else:
-            print(f"⚠️ Dialog cancelled. Using defaults.")
-            return {
-            "Solver": "DiffusionSolverFE",
-            "GlobalDiffusionConstant": 0.01,      # 必须叫这个名字
-            "GlobalDecayConstant": 0.0001,         # 必须叫这个名字
-            "InitialConcentrationExpression": "0.0",
-            "BoundaryConditions": {},
-            "Chemotaxis": []
-        }
-        '''
+
     return None
 
 def ask_params_gui(mode, name, parent):
@@ -77,7 +66,6 @@ def ask_params_gui(mode, name, parent):
                     "behaviour": "secrete",
                     "target": "global",
                     "apply": {"field": name, "rate": 0.1}
-                    # 有不同的secrete mode
                 }
                 parent.registry.add_rule(secrete_rule)
                 print(f"✅ Auto-generated secretion rule for {name}")

@@ -455,9 +455,6 @@ class StructureManager:
                 
                 print(f"[StructureManager] Added Chemotaxis placeholder for {t_name} on field {field_name}")
 
-
-
-
        
                 # if cell_widget and type_widget:
                 #     self.field_data["Chemotaxis"].append({
@@ -469,20 +466,18 @@ class StructureManager:
                     
     def migrate_field_data(self):
         """
-        [ULTRA SYNC VERSION] 
-        强制输出全小写、格式统一的数据结构。
+        sync date between registry and xml
         """
         fields_data = {}
 
-        # 1. 扫描所有 DiffusionSolverFE (处理重复节点问题)
-        # 我们用 findall 遍历，虽然逻辑上我们最后要清空重复的，但在读取阶段我们要拿到所有信息
+        # 1. Scan all DiffusionSolverFE nodes and handle duplicate node issues
         for solver in self.root.findall('.//Steppable[@Type="DiffusionSolverFE"]'):
             for d_field in solver.findall('DiffusionField'):
                 f_name = d_field.get('Name')
                 if not f_name: continue
                 
                 if f_name not in fields_data:
-                    # 初始化标准结构
+                    # initialize standard structure
                     fields_data[f_name] = {
                         "solver": "DiffusionSolverFE",
                         "diffusion_constant": 0.1,
@@ -493,40 +488,38 @@ class StructureManager:
                         "python_secretion": False
                     }
                 
-                # 提取 PDE 参数
+                # extract PDE parameters
                 d_data = d_field.find('DiffusionData')
                 if d_data is not None:
                     fields_data[f_name]["diffusion_constant"] = float(d_data.findtext('GlobalDiffusionConstant') or 0.1)
                     fields_data[f_name]["decay_constant"] = float(d_data.findtext('GlobalDecayConstant') or 0.0)
                     fields_data[f_name]["initial_expression"] = d_data.findtext('InitialConcentrationExpression') or "0.0"
 
-                # 提取 边界条件 (解决你说的 BC 丢失关键)
+                # extract Boundary Conditions
                 bc_node = d_field.find('BoundaryConditions')
                 if bc_node is not None:
                     for plane in bc_node.findall('Plane'):
                         axis = plane.get('Axis')
-                        # 识别 Periodic
+                        # Periodic
                         if plane.find('Periodic') is not None:
                             fields_data[f_name]["boundary_conditions"][axis] = {"type": "Periodic"}
-                        # 识别 ConstantValue / ConstantDerivative
+                        # ConstantValue / ConstantDerivative
                         else:
-                            # 简单起见，取 Min 的类型和数值
                             for val_type in ['ConstantValue', 'ConstantDerivative']:
                                 node = plane.find(val_type)
                                 if node is not None:
                                     fields_data[f_name]["boundary_conditions"][axis] = {
                                         "type": val_type,
                                         "min_val": float(node.get('Value') or 0.0),
-                                        "max_val": float(node.get('Value') or 0.0) # 假设对称
+                                        "max_val": float(node.get('Value') or 0.0) 
                                     }
 
-        # 2. 提取 Chemotaxis (输出 List 格式)
+        # 2. Extract Chemotaxis (output in list format)
         chem_plugin = self.root.find('.//Plugin[@Name="Chemotaxis"]')
         if chem_plugin is not None:
             for c_field in chem_plugin.findall('ChemicalField'):
                 f_name = c_field.get('Name')
                 if f_name in fields_data:
-                    # 每次读取前确保它是列表，防止被旧代码的字典格式污染
                     if not isinstance(fields_data[f_name]["chemotaxis"], list):
                         fields_data[f_name]["chemotaxis"] = []
 
@@ -534,7 +527,6 @@ class StructureManager:
                         mode = "simple"
                         sat_val = 0.0
                         
-                        # 🚩 修复截图中的报错：先 get 再判断 None
                         s_coef = c_type.get("SaturationCoef")
                         sl_coef = c_type.get("SaturationLinearCoef")
                         
@@ -557,36 +549,31 @@ class StructureManager:
     
     def clear_field_and_related_plugins(self):
         """
-        清空 XML 中的 DiffusionSolverFE、Chemotaxis 和 Secretion 节点。
-        就像在画布上重新作画前，先把这几块区域擦干净。
+        Clear the DiffusionSolverFE, Chemotaxis, and Secretion nodes in the XML.
         """
-        cc3d_root = self.root  # 假设 self.root 是 <CompuCell3D> 根节点
+        cc3d_root = self.root  # self.root is the root node of <CompuCell3D> 
 
-        # 1. 揪出并删除所有的 DiffusionSolverFE 节点
+        # Identify and remove all DiffusionSolverFE nodes.
         for solver in cc3d_root.findall('.//Steppable[@Type="DiffusionSolverFE"]'):
             cc3d_root.remove(solver)
 
-        # 2. 揪出并删除所有的 Chemotaxis 插件
+        # Identify and remove all Chemotaxis plugins
         for plugin in cc3d_root.findall('.//Plugin[@Name="Chemotaxis"]'):
             cc3d_root.remove(plugin)
 
-        # 3. 揪出并删除所有的 Secretion 插件 (如果有的话)
+        # 3. Identify and remove all Secretion plugins(not added yet)
         for plugin in cc3d_root.findall('.//Plugin[@Name="Secretion"]'):
             cc3d_root.remove(plugin)
             
-        # 注意：这里我们不需要调用 self.save()，
-        # 因为清空只是中间步骤，等后续重新生成完 XML 节点后，再统一 save。
-
-        # StructureManager.py
+        # Save after regenerating the XML nodes later. No need to save here.
 
     def get_all_fields_from_xml(self):
         """
-        系统级修复版：解析 Rules_project.xml 并提取所有场参数。
-        支持 Plane Axis 结构并兼容多种边界定义。
+        Parse Rules_project.xml and extract all field parameters.
         """
         fields_data = {}
         
-        # 使用 .// 确保能搜到嵌套在任何位置的 Steppable
+        # Use .// to ensure Steppables nested at any level can be found.
         steppables = self.root.findall('.//Steppable')
         
         for steppable in steppables:
@@ -598,7 +585,7 @@ class StructureManager:
                     f_name = field.get('Name')
                     if not f_name: continue
                     
-                    # 初始化参数字典（全部统一小写，防止 JSON 出现两套 Key）
+                    # Initialize params dict
                     params = {
                         'solver': solver_type,
                         'diffusion_constant': 0.01,
@@ -608,10 +595,9 @@ class StructureManager:
                         'boundary_conditions': {}
                     }
                     
-                    # 1. 解析 DiffusionData
+                    # 1. Parse DiffusionData
                     diff_data = field.find('DiffusionData')
                     if diff_data is not None:
-                        # CC3D XML 里的标签通常是大驼峰
                         d_const = diff_data.find('DiffusionConstant') or diff_data.find('GlobalDiffusionConstant')
                         dy_const = diff_data.find('DecayConstant') or diff_data.find('GlobalDecayConstant')
                         init_expr = diff_data.find('InitialConcentrationExpression')
@@ -620,30 +606,27 @@ class StructureManager:
                         if dy_const is not None: params['decay_constant'] = float(dy_const.text or 0.0001)
                         if init_expr is not None: params['initial_expression'] = init_expr.text or "0.0"
 
-                    # 2. 解析 BoundaryConditions (修复重点)
+                    # 2. Parse BoundaryConditions 
                     bc_tag = field.find("BoundaryConditions")
                     if bc_tag is not None:
-                        # 处理 <Plane Axis="X"> 这种结构
+                        # address <Plane Axis="X"> 
                         planes = bc_tag.findall("Plane")
                         for p in planes:
-                            axis_name = p.get("Axis") # 获取 "X", "Y", 或 "Z"
+                            axis_name = p.get("Axis") # get "X", "Y", or "Z"
                             if not axis_name: continue
                             
-                            # 初始化该轴的默认数据
+                            # initialize default data
                             axis_info = {'type': 'Periodic', 'min_val': 0.0, 'max_val': 0.0}
                             
-                            # 检查子标签，如 <ConstantValue>, <ConstantDerivative>, <Periodic>
-                            # 优先查找是否有具体定义
+                            # check the sub label <ConstantValue>, <ConstantDerivative>, <Periodic>
                             periodic = p.find("Periodic")
                             c_val = p.find("ConstantValue")
                             c_der = p.find("ConstantDerivative")
                             
                             if c_val is not None:
                                 axis_info['type'] = 'ConstantValue'
-                                # 遍历 Min/Max 属性
                                 axis_info['min_val'] = float(c_val.get('Value', 0.0)) if c_val.get('PlanePosition') == "Min" else axis_info['min_val']
-                                # 注意：XML 里的 Min/Max 可能是分开的两个标签，也可能是一个标签带属性
-                                # 这里处理常见的嵌套查找
+                                
                                 for cv in p.findall("ConstantValue"):
                                     if cv.get('PlanePosition') == "Min": axis_info['min_val'] = float(cv.get('Value', 0.0))
                                     if cv.get('PlanePosition') == "Max": axis_info['max_val'] = float(cv.get('Value', 0.0))
@@ -660,7 +643,7 @@ class StructureManager:
                             params['boundary_conditions'][axis_name] = axis_info
                     
                     params['chemotaxis'] = []
-                    # 找到 Plugin Chemotaxis 下对应 field_name 的 ChemicalField
+                    # Find the ChemicalField corresponding to the given field_name under the Plugin Chemotaxis.
                     chem_plugin = self.root.find(".//Plugin[@Name='Chemotaxis']")
                     if chem_plugin is not None:
                         cf_node = chem_plugin.find(f"ChemicalField[@Name='{f_name}']")
@@ -669,7 +652,6 @@ class StructureManager:
                                 e_mode = "simple"
                                 e_sat = "0.0"
                                 
-                                # 识别 XML 特有属性
                                 if "SaturationCoef" in entry.attrib:
                                     e_mode = "saturation"
                                     e_sat = entry.get("SaturationCoef")
@@ -692,15 +674,15 @@ class StructureManager:
 
     def ensure_field_xml_from_registry(self, field_params):
         """
-        根据 Registry 中的 field_params 字典，从头生成纯净的 XML 节点。
+        Regenerate clean XML nodes from scratch based on the field_params dictionary in the Registry.
         """
         print("🚨 BUILD XML CALLED")
         if not field_params:
-            return  # 如果没有任何场数据，直接返回
+            return  
         for steppable in self.root.findall("Steppable[@Type='DiffusionSolverFE']"):
             self.root.remove(steppable)
         
-        # 找到 Chemotaxis 插件并清空（保留插件外壳，清空内容）
+        # # Locate the Chemotaxis plugin and clear it (keep the plugin shell, remove its contents)
         chemo_plugin = self.root.find(".//Plugin[@Name='Chemotaxis']")
         if chemo_plugin is not None:
             for child in list(chemo_plugin):
@@ -709,9 +691,9 @@ class StructureManager:
             chemo_plugin = ET.SubElement(self.root, "Plugin", Name="Chemotaxis")
 
         # ==========================================
-        # 1. 重建 DiffusionSolverFE 节点
+        # 1. Reconstruct DiffusionSolverFE Node
         # ==========================================
-        # 创建 <Steppable Type="DiffusionSolverFE">
+        # Construct <Steppable Type="DiffusionSolverFE">
         solver_node = ET.SubElement(self.root, 'Steppable', attrib={'Type': 'DiffusionSolverFE'})
         
         has_chemotaxis = any(
@@ -726,7 +708,6 @@ class StructureManager:
             
             ET.SubElement(data_node, 'FieldName').text = field_name
             
-            # 🟢 使用 Registry 里的实际 Key 名
             if 'diffusion_constant' in params:
                 ET.SubElement(data_node, 'GlobalDiffusionConstant').text = str(params['diffusion_constant'])
                 
@@ -739,18 +720,16 @@ class StructureManager:
             # Secretion through python?
             py_sec = params.get('python_secretion', False)
             if py_sec:
-            # 如果是 Python 控制，XML 里的 DiffusionField 内部不写 SecretionData
-            # 这样就相当于你说的 "删掉/Comment out"
                 print(f"[SM] {field_name} uses Python secretion. Skipping XML SecretionData.")
             else:
-                # 如果不是 Python 控制，则按原样写入 XML SecretionData
+                # If not controlled by Python, write SecretionData into the XML as-is
                 if 'SecretionData' in params:
                     sec_data_node = ET.SubElement(field_node, 'SecretionData')
                     for ct_name, rate in params['SecretionData'].items():
                         sec_node = ET.SubElement(sec_data_node, 'Secretion', attrib={'Type': ct_name})
                         sec_node.text = str(rate)
 
-            # 🟢 新增：处理 BoundaryConditions
+            #  BoundaryConditions
             if 'boundary_conditions' in params and params['boundary_conditions']:
                 bc_node = ET.SubElement(field_node, 'BoundaryConditions')
                 
@@ -760,11 +739,9 @@ class StructureManager:
                     print(f"DEBUG: Axis {axis} config: {config}")
 
                     if bc_type == "Periodic":
-                        # 周期性边界不需要指定 Min/Max
                         ET.SubElement(plane_node, 'Periodic')
                     
                     elif bc_type == "ConstantValue":
-                        # 固定值边界
                         ET.SubElement(plane_node, 'ConstantValue', attrib={
                             'PlanePosition': 'Min', 'Value': str(config.get('min_val', 0.0))
                         })
@@ -773,7 +750,6 @@ class StructureManager:
                         })
                         
                     elif bc_type == "ConstantDerivative":
-                        # 固定导数（冯·诺依曼边界）
                         ET.SubElement(plane_node, 'ConstantDerivative', attrib={
                             'PlanePosition': 'Min', 'Value': str(config.get('min_val', 0.0))
                         })
@@ -781,19 +757,16 @@ class StructureManager:
                             'PlanePosition': 'Max', 'Value': str(config.get('max_val', 0.0))
                         })
 
-        # 重建 Chemotaxis 插件节点
+        # Reconstrutct Chemotaxis plugin node
         if has_chemotaxis:
             chemo_plugin = self.root.find(".//Plugin[@Name='Chemotaxis']")
             if chemo_plugin is not None:
                 for child in list(chemo_plugin):
                     chemo_plugin.remove(child)
             else:
-                # 如果没有则新建
                 chemo_plugin = ET.SubElement(self.root, 'Plugin', attrib={'Name': 'Chemotaxis'})
 
-            # --- 开始插入你那段更新代码 ---
             for field_name, params in field_params.items():
-                # 获取趋化数据，确保它是列表
                 chemo_data = params.get('chemotaxis', [])
                 if not chemo_data: 
                     continue
@@ -804,10 +777,8 @@ class StructureManager:
                     if not isinstance(entry, dict):
                         print(f"⚠️ [SM] Skipping invalid chemotaxis entry: {entry} (type: {type(entry)})")
                         continue
-                    # 1. 基础属性提取 + 防空处理 (解决截图中的 None 报错)
                     c_type = entry.get('cell_type') or entry.get('CellType', 'Unknown')
                     
-                    # 使用 float() 再转 str() 是为了确保格式统一，并能处理空字符串情况
                     raw_lambda = entry.get('lambda') or entry.get('Lambda', '0.0')
                     l_val = str(float(raw_lambda)) if raw_lambda is not None else "0.0"
                     
@@ -821,17 +792,15 @@ class StructureManager:
                         'Lambda': l_val
                     }
 
-                    # 2. 🚩 动态属性映射 (根据 Mode 决定标签)
+                    # 2. Determine the tag based on the mode.
                     if mode == "saturation":
                         attribs['SaturationCoef'] = s_coef
                     elif mode == "saturation linear":
                         attribs['SaturationLinearCoef'] = s_coef
-                    # 如果是 simple，则只有 Type 和 Lambda
 
                     ET.SubElement(chem_field_node, 'ChemotaxisByType', attrib=attribs)
 
-        # 🟢 关键：确保 Secretion Plugin 存在（用于 Python Secretor 初始化）
-        # 只要有任何一个场开启了 Python Secretion，就必须有这个插件
+        # If any field has Python-based secretion enabled, this plugin must be present.
         any_py_sec = any(p.get('python_secretion') for p in field_params.values())
         if any_py_sec:
             if self.root.find(".//Plugin[@Name='Secretion']") is None:

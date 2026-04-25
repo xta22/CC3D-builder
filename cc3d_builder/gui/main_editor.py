@@ -485,7 +485,7 @@ class MainWindow(QWidget):
             extract_params_func = extract_params,    
             existing_params = None
         )
-        print(f"DEBUG: Detected Params -> {final_params}") # 👈 加这一
+        print(f"DEBUG: Detected Params -> {final_params}") 
         if final_params:
             return {
                 "script_path": file_path.as_posix(),

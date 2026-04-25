@@ -33,9 +33,6 @@
         <ChemicalField Name="Oxygen">
             <ChemotaxisByType Type="Cell" Lambda="1000.0"></ChemotaxisByType>
         </ChemicalField>
-        <ChemicalField Name="Substrate">
-            <ChemotaxisByType Type="CellA" Lambda="500.0" SaturationCoef="5.0"></ChemotaxisByType>
-        </ChemicalField>
     </Plugin>
     <Plugin Name="Secretion">
    </Plugin>
@@ -71,27 +68,6 @@
                 <Plane Axis="Y">
                     <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
                     <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
-                </Plane>
-            </BoundaryConditions>
-        </DiffusionField>
-        <DiffusionField Name="Substrate">
-            <DiffusionData>
-                <FieldName>Substrate</FieldName>
-                <GlobalDiffusionConstant>0.1</GlobalDiffusionConstant>
-                <GlobalDecayConstant>0.0001</GlobalDecayConstant>
-                <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
-            </DiffusionData>
-            <BoundaryConditions>
-                <Plane Axis="X">
-                    <ConstantValue PlanePosition="Min" Value="5.0"></ConstantValue>
-                    <ConstantValue PlanePosition="Max" Value="5.0"></ConstantValue>
-                </Plane>
-                <Plane Axis="Y">
-                    <ConstantDerivative PlanePosition="Min" Value="1.0"></ConstantDerivative>
-                    <ConstantDerivative PlanePosition="Max" Value="1.0"></ConstantDerivative>
-                </Plane>
-                <Plane Axis="Z">
-                    <Periodic></Periodic>
                 </Plane>
             </BoundaryConditions>
         </DiffusionField>

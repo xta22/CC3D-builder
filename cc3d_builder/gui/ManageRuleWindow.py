@@ -23,7 +23,6 @@ class ManageRulesWindow(QWidget):
     def __init__(self, registry: 'SimulationRegistry', sm, injector, ask_func=None, main_editor=None):
         super().__init__()
         self.registry = registry
-        # 🟢 修正：将 sm 保存为 self.structure_manager 供 field_manager 使用
         self.sm = sm
         self.structure_manager = sm 
         self.injector = injector
@@ -32,10 +31,8 @@ class ManageRulesWindow(QWidget):
 
         self.resize(1600, 800) 
         
-        # 主布局：左右分割
         self.main_h_layout = QHBoxLayout(self)
         
-        # 左侧：规则表格区域
         self.left_container = QWidget()
         self.main_layout = QVBoxLayout(self.left_container)
         self.setup_toolbar()
@@ -43,17 +40,13 @@ class ManageRulesWindow(QWidget):
         self.setup_table_config()
         self.main_layout.addWidget(self.table)
         self.main_h_layout.addWidget(self.left_container, stretch=3)
-        
-        # 右侧：管理器区域（包含 Cell 和 Field）
+
         self.right_container = QWidget()
         self.right_layout = QVBoxLayout(self.right_container)
         
-        # 1. 细胞管理器
         self.cell_manager = CellInventoryWidget(self.registry, on_changed_callback=self.save_and_sync)
         self.right_layout.addWidget(self.cell_manager)
         
-        # 2. 🟢 修正：场管理器（创建 FieldManagerWidget）
-        # 注意：这里调用 self.get_current_celltypes()
         self.field_manager = FieldManagerWidget(
             registry=self.registry, 
             structure_manager=self.structure_manager,
@@ -66,11 +59,11 @@ class ManageRulesWindow(QWidget):
         self.refresh_table()
         self.field_manager.refresh_table()
 
-    # 🟢 新增：获取当前所有细胞类型的辅助函数
+    # Helper function to retrieve all current cell types.
     def get_current_celltypes(self) -> List[str]:
         return list(self.registry.celltype_params.keys())
 
-    # 🟢 新增：供 FieldManagerWidget 调用的 XML 重建函数
+    # XML reconstruction function for use by `FieldManagerWidget`.
     def trigger_xml_rebuild(self):
         print("🛠️ Triggering XML Rebuild from Field Manager...")
         self.save_and_sync()
@@ -389,20 +382,16 @@ class ManageRulesWindow(QWidget):
         self.registry.save()
             
         try:
-            # 2. 使用 StructureManager 进行“手术级”同步
-            # 这是你之前花精力修好的、支持各种 mode 的逻辑
             if hasattr(self, 'structure_manager'):
                 print("🚀 Using StructureManager for precise XML sync...")
                 self.structure_manager.ensure_field_xml_from_registry(self.registry.field_params)
                 self.structure_manager.save()
             else:
-                # 兜底方案
                 self.registry.export_to_xml() 
                 
         except Exception as e:
             print(f"Export XML Error: {e}")
 
-        # 3. 界面同步
         if self.main_editor and hasattr(self.main_editor, 'refresh_list'):
             self.main_editor.refresh_list()
 
@@ -460,11 +449,11 @@ class ManageRulesWindow(QWidget):
                 self.refresh_table()
 
     def open_field_setup(self, field_name):
-        # 1. 从 Registry 拿到向导或之前存的完整数据
+        # Retrieve the complete data from the Registry, 
+        # either from the wizard or previously stored data.
         current_params = self.registry.get_field_params(field_name)
         
-        # 2. 实例化你那个已经写好的配置窗口
-        # 🌟 传入 initial_data 实现“数据回显”
+        # Instantiate the configuration window you’ve already implemented.
         dialog = FieldSetupDialog(
             field_name=field_name,
             available_celltypes=self.available_celltypes,
@@ -472,17 +461,17 @@ class ManageRulesWindow(QWidget):
             parent=self
         )
         
-        # 3. 如果用户点击了 Confirm
+        # if user hit Confirm
         if dialog.exec_() == QDialog.Accepted:
             updated_data = dialog.get_data()
             
-            # 4. 更新 Registry 中的数据
+            # update Registry
             self.registry.update_field(field_name, updated_data)
             
-            # 5. 🟢 关键：立即触发 XML 重新生成
+            # regenerate XML
             self.structure_manager.ensure_field_xml_from_registry(self.registry.get_all_fields())
             
-            # 6. 刷新一下当前的管理器列表（万一改了扩散系数等摘要信息）
+            # refresh the managewindow
             self.refresh_table()
             print(f"✅ Field {field_name} updated and XML rebuilt.")
 
@@ -608,7 +597,7 @@ class FieldManagerWidget(QWidget):
     def __init__(self, registry, structure_manager, available_celltypes, parent=None):
         super().__init__(parent)
         self.registry = registry
-        self.structure_manager = structure_manager # 明确保存
+        self.structure_manager = structure_manager 
         self.available_celltypes = available_celltypes
         self.init_ui()
 
@@ -619,15 +608,14 @@ class FieldManagerWidget(QWidget):
         self.table.setHorizontalHeaderLabels(["Field Name", "Solver", "Diffusion Constant", "Decay Constant"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
-        # 🌟 关键：连接双击事件
         self.table.itemDoubleClicked.connect(self.on_item_double_clicked)
         
         layout.addWidget(self.table)
         self.refresh_table()
 
     def refresh_table(self):
-        """从 Registry 同步最新数据到 UI 列表"""
-        all_fields = self.registry.get_all_fields() # 假设你 Registry 有这个方法
+        """Synchronize the latest data from the Registry to the UI list."""
+        all_fields = self.registry.get_all_fields() 
         print(f"DEBUG22: FieldManager is refreshing. Found fields: {list(all_fields.keys())}")
         self.table.setRowCount(len(all_fields))
         
@@ -637,9 +625,7 @@ class FieldManagerWidget(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(str(params.get('diffusion_constant', '0.0'))))
             self.table.setItem(row, 3, QTableWidgetItem(str(params.get('decay_constant', '0.00001'))))
 
-
             edit_btn = QPushButton("⚙️ Configure")
-            # 如果 open_field_setup 在 ManageRulesWindow，则用 self.main_window.open_field_setup
             edit_btn.clicked.connect(lambda _, n=name: self.parent().open_field_setup(n))
             self.table.setCellWidget(row, 4, edit_btn)
 
@@ -649,7 +635,7 @@ class FieldManagerWidget(QWidget):
         field_name = self.table.item(row, 0).text()
         current_data = self.registry.get_field_params(field_name)
         
-        # 🟢 修正：导入 Dialog 类并传入 parent
+        # Import the Dialog class and pass in the parent.
         from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
         dialog = FieldSetupDialog(
             field_name=field_name, 
@@ -663,7 +649,7 @@ class FieldManagerWidget(QWidget):
             self.registry.update_field(field_name, new_data)
             self.refresh_table()
             
-            # 🟢 修正：更安全的调用方式
-            main_win = self.window() # 获取顶层窗口 ManageRulesWindow
+            main_win = self.window() #Get the top-level window `ManageRulesWindow`.
+
             if hasattr(main_win, 'trigger_xml_rebuild'):
                 main_win.trigger_xml_rebuild()
