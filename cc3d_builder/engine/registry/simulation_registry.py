@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from cc3d_builder.core.structure_manager import StructureManager
+from cc3d_builder.engine.code_generator import CC3DAdvancedGenerator
 
 class SimulationRegistry:
 
@@ -120,6 +121,13 @@ class SimulationRegistry:
                 "field_params": self.field_params
             }, f, indent=2)
 
+        try:
+            generator = CC3DAdvancedGenerator(self)
+            # 生成到 Simulation 文件夹下
+            generator.save_to_file(self.project_path / "Simulation")
+            print("🚀 [Generator] Steppables.py has been re-compiled.")
+        except Exception as e:
+            print(f"❌ [Generator] Failed to compile rules: {e}")
     # ============================================================
     # ============================================================
 

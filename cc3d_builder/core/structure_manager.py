@@ -467,72 +467,93 @@ class StructureManager:
                 #         "SatCoef": float(self.table_chemo.item(row, 3).text())
                 #     })
                     
-
     def migrate_field_data(self):
         """
-        Extract DiffusionSolverFE and Chemotaxis Configuration from original XML
-        {
-            "Oxygen": {
-                "GlobalDiffusionConstant": 0.9,
-                "GlobalDecayConstant": 1e-05,
-                "InitialConcentrationExpression": "x/100",
-                "Chemotaxis": {"Cell": 1000.0}
-            }
-        }
+        [ULTRA SYNC VERSION] 
+        强制输出全小写、格式统一的数据结构。
         """
         fields_data = {}
 
-        # ==========================================
-        # 1. 提取 DiffusionSolverFE 参数
-        # ==========================================
-        diffusion_solver = self.root.find('.//Steppable[@Type="DiffusionSolverFE"]')
-        if diffusion_solver is not None:
-            for d_field in diffusion_solver.findall('DiffusionField'):
-                field_name = d_field.get('Name')
-                diff_data = d_field.find('DiffusionData')
+        # 1. 扫描所有 DiffusionSolverFE (处理重复节点问题)
+        # 我们用 findall 遍历，虽然逻辑上我们最后要清空重复的，但在读取阶段我们要拿到所有信息
+        for solver in self.root.findall('.//Steppable[@Type="DiffusionSolverFE"]'):
+            for d_field in solver.findall('DiffusionField'):
+                f_name = d_field.get('Name')
+                if not f_name: continue
                 
-                if field_name not in fields_data:
-                    fields_data[field_name] = {}
-                if diff_data is not None:
-        
-                    # 提取核心参数
-                    g_diff = diff_data.findtext('GlobalDiffusionConstant')
-                    g_decay = diff_data.findtext('GlobalDecayConstant')
-                    init_expr = diff_data.findtext('InitialConcentrationExpression')
-
-                    if g_diff: fields_data[field_name]['GlobalDiffusionConstant'] = float(g_diff)
-                    if g_decay: fields_data[field_name]['GlobalDecayConstant'] = float(g_decay)
-                    if init_expr: fields_data[field_name]['InitialConcentrationExpression'] = init_expr
-                    
-                # ===You can also add logic here to parse BoundaryConditions and CellType-specific coefficients.
-
-        # ==========================================
-        # 2. Extract chemo parameters and merge
-        # ==========================================
-        chemotaxis_plugin = self.root.find('.//Plugin[@Name="Chemotaxis"]')
-        if chemotaxis_plugin is not None:
-            for c_field in chemotaxis_plugin.findall('ChemicalField'):
-                field_name = c_field.get('Name')
+                if f_name not in fields_data:
+                    # 初始化标准结构
+                    fields_data[f_name] = {
+                        "solver": "DiffusionSolverFE",
+                        "diffusion_constant": 0.1,
+                        "decay_constant": 0.0,
+                        "initial_expression": "0.0",
+                        "boundary_conditions": {},
+                        "chemotaxis": [],
+                        "python_secretion": False
+                    }
                 
-                if field_name not in fields_data:
-                    fields_data[field_name] = {}
-                
-                if 'Chemotaxis' not in fields_data[field_name]:
-                    fields_data[field_name]['Chemotaxis'] = {}
+                # 提取 PDE 参数
+                d_data = d_field.find('DiffusionData')
+                if d_data is not None:
+                    fields_data[f_name]["diffusion_constant"] = float(d_data.findtext('GlobalDiffusionConstant') or 0.1)
+                    fields_data[f_name]["decay_constant"] = float(d_data.findtext('GlobalDecayConstant') or 0.0)
+                    fields_data[f_name]["initial_expression"] = d_data.findtext('InitialConcentrationExpression') or "0.0"
 
-                for c_type in c_field.findall('ChemotaxisByType'):
-                    cell_type = c_type.get('Type')
-                    lambda_val = c_type.get('Lambda')
-                    if cell_type and lambda_val:
-                        fields_data[field_name]['Chemotaxis'][cell_type] = float(lambda_val)
+                # 提取 边界条件 (解决你说的 BC 丢失关键)
+                bc_node = d_field.find('BoundaryConditions')
+                if bc_node is not None:
+                    for plane in bc_node.findall('Plane'):
+                        axis = plane.get('Axis')
+                        # 识别 Periodic
+                        if plane.find('Periodic') is not None:
+                            fields_data[f_name]["boundary_conditions"][axis] = {"type": "Periodic"}
+                        # 识别 ConstantValue / ConstantDerivative
+                        else:
+                            # 简单起见，取 Min 的类型和数值
+                            for val_type in ['ConstantValue', 'ConstantDerivative']:
+                                node = plane.find(val_type)
+                                if node is not None:
+                                    fields_data[f_name]["boundary_conditions"][axis] = {
+                                        "type": val_type,
+                                        "min_val": float(node.get('Value') or 0.0),
+                                        "max_val": float(node.get('Value') or 0.0) # 假设对称
+                                    }
 
-        # ==========================================
-        # 3. (可选) 提取 Secretion 参数并合并
-        # ==========================================
-        secretion_plugin = self.root.find('.//Plugin[@Name="Secretion"]')
-        # ... 仿照上面的逻辑，如果 XML 里有 Secretion 标签，也合并到 fields_data 中 ...
+        # 2. 提取 Chemotaxis (输出 List 格式)
+        chem_plugin = self.root.find('.//Plugin[@Name="Chemotaxis"]')
+        if chem_plugin is not None:
+            for c_field in chem_plugin.findall('ChemicalField'):
+                f_name = c_field.get('Name')
+                if f_name in fields_data:
+                    # 每次读取前确保它是列表，防止被旧代码的字典格式污染
+                    if not isinstance(fields_data[f_name]["chemotaxis"], list):
+                        fields_data[f_name]["chemotaxis"] = []
+
+                    for c_type in c_field.findall('ChemotaxisByType'):
+                        mode = "simple"
+                        sat_val = 0.0
+                        
+                        # 🚩 修复截图中的报错：先 get 再判断 None
+                        s_coef = c_type.get("SaturationCoef")
+                        sl_coef = c_type.get("SaturationLinearCoef")
+                        
+                        if s_coef is not None:
+                            mode = "saturation"
+                            sat_val = float(s_coef)
+                        elif sl_coef is not None:
+                            mode = "saturation linear"
+                            sat_val = float(sl_coef)
+
+                        fields_data[f_name]["chemotaxis"].append({
+                            "cell_type": c_type.get('Type', 'Unknown'),
+                            "lambda": float(c_type.get('Lambda') or 0.0),
+                            "mode": mode,
+                            "sat_coef": sat_val
+                        })
 
         return fields_data
+
     
     def clear_field_and_related_plugins(self):
         """
@@ -676,6 +697,16 @@ class StructureManager:
         print("🚨 BUILD XML CALLED")
         if not field_params:
             return  # 如果没有任何场数据，直接返回
+        for steppable in self.root.findall("Steppable[@Type='DiffusionSolverFE']"):
+            self.root.remove(steppable)
+        
+        # 找到 Chemotaxis 插件并清空（保留插件外壳，清空内容）
+        chemo_plugin = self.root.find(".//Plugin[@Name='Chemotaxis']")
+        if chemo_plugin is not None:
+            for child in list(chemo_plugin):
+                chemo_plugin.remove(child)
+        else:
+            chemo_plugin = ET.SubElement(self.root, "Plugin", Name="Chemotaxis")
 
         # ==========================================
         # 1. 重建 DiffusionSolverFE 节点

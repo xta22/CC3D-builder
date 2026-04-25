@@ -386,15 +386,25 @@ class ManageRulesWindow(QWidget):
             self.table.selectRow(new_row)
 
     def save_and_sync(self):
-            self.registry.save()
+        self.registry.save()
             
-            try:
+        try:
+            # 2. 使用 StructureManager 进行“手术级”同步
+            # 这是你之前花精力修好的、支持各种 mode 的逻辑
+            if hasattr(self, 'structure_manager'):
+                print("🚀 Using StructureManager for precise XML sync...")
+                self.structure_manager.ensure_field_xml_from_registry(self.registry.field_params)
+                self.structure_manager.save()
+            else:
+                # 兜底方案
                 self.registry.export_to_xml() 
-            except Exception as e:
-                print(f"Export XML Error: {e}")
+                
+        except Exception as e:
+            print(f"Export XML Error: {e}")
 
-            if self.main_editor and hasattr(self.main_editor, 'refresh_list'):
-                self.main_editor.refresh_list()
+        # 3. 界面同步
+        if self.main_editor and hasattr(self.main_editor, 'refresh_list'):
+            self.main_editor.refresh_list()
 
     def handle_back(self):
         self.save_and_sync()
