@@ -20,10 +20,12 @@ class SimulationRegistry:
         self.celltype_params = {}
         self.field_params = {}
 
-    def add_celltype_params(self, name, target, lam):
+    def add_celltype_params(self, name, target, lam, count=5, should_init=True):
         self.celltype_params[name] = {
             "targetVolume": target,
-            "lambdaVolume": lam
+            "lambdaVolume": lam,
+            "initial_count": count,            # 提供默认值
+             "should_initialize": should_init
         }
         self.save()
 
