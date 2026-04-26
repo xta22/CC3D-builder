@@ -10,6 +10,33 @@ def evaluate_single_condition(cond, cell, engine):
     if cond_type == "TRUE":
         return True
 
+    # --- Environment Condition ---
+    elif cond_type == "Environment":
+        field_name = p.get("field_name")
+        operator = p.get("operator", ">")
+        threshold = float(p.get("threshold", 0.0))
+
+        if not field_name:
+            print("[Environment Error] field_name missing")
+            return False
+
+        # get field value from enging
+        try:
+            field = getattr(engine.field, field_name)
+            val = field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
+        except AttributeError:
+            print(f"[Environment Error] Field {field_name} not found in engine.field")
+            return False
+
+        # logic comparison
+        if operator == ">": return val > threshold
+        elif operator == ">=": return val >= threshold
+        elif operator == "<": return val < threshold
+        elif operator == "<=": return val <= threshold
+        elif operator == "==": return val == threshold
+        return False
+    # ---------------------------
+
     elif cond_type in ["time_window", "TimeWindow"]:
         start = p.get("start", p.get("start_mcs", 0))
         end = p.get("end", p.get("end_mcs", float("inf")))

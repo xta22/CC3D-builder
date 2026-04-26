@@ -39,9 +39,11 @@ class RuleEngineSteppable(SteppableBasePy):
         self.load_rules()
 
     def load_rules(self):
+        
         project_dir = Path(self.simulator.getBasePath())
         rules_path = project_dir / "Simulation" / "rules.json"
         
+        print(f"🔍 [DEBUG 1] Loading rules from: {rules_path}")
         if not rules_path.exists():
             print(f"ℹ️ [RuleEngine] No rules.json found at {rules_path}")
             return
@@ -50,6 +52,7 @@ class RuleEngineSteppable(SteppableBasePy):
             data = json.load(f)
 
         self.rules = data.get("rules", [])
+        print(f"✅ [DEBUG 1] Rules loaded. Count: {len(self.rules)}")
         self.celltype_params = data.get("celltype_params", {})
 
     # ============================================================
@@ -114,16 +117,99 @@ class RuleEngineSteppable(SteppableBasePy):
 
             try:
                 target_id = getattr(self, target.upper())
+                print(f"🕵️ [CRITICAL] Rule Target: {target} | Resolved ID: {target_id} | Total Cells in Sim: {len(self.cell_list)}")
             except AttributeError:
                 print(f"[Warning] Unknown cell type: {target}")
                 continue
 
-            for cell in self.cell_list_by_type(target_id):
 
+            # =========== DEBUG ===========
+            type_counts = {}
+            for cell in self.cell_list:
+                t = cell.type
+                type_counts[t] = type_counts.get(t, 0) + 1
+            print(f"📊 [INVENTORY] Current Cell Inventory (Type ID : Count): {type_counts}")
+            # =========== DEBUG ===========
+
+            '''
+            for cell in self.cell_list_by_type(target_id):
+                print(f"Processing Cell ID: {cell.id}")
+                print(f"DEBUG: Cell {cell.id} 正在匹配规则，Case 数量: {len(rule.get('cases', []))}")
                 for case in rule["cases"]:
 
                     if not evaluate_condition(case["when"], cell, self):
                         continue
+
+                    # =====DEBUG========
+                    res = evaluate_condition(case["when"], cell, self)
+            '''
+            for cell in self.cell_list_by_type(target_id):
+                cases = rule.get("cases", [])
+                
+                for case in cases:
+                    # 🔍 每一个 Case 开始前强制打印
+                    print(f"DEBUG: [START_EVAL] Cell {cell.id} 开始判定条件...")
+                    
+                    try:
+                        # 核心嫌疑人：evaluate_condition
+                        cond_data = case.get("when", {})
+                        
+                        if cond_data.get("condition_type") == "Environment":
+                                    fname = cond_data.get("params", {}).get("field_name", "Oxygen")
+                                    threshold = cond_data.get("params", {}).get("threshold", 0.0)
+                                    
+                                    # 1. 获取场对象
+                                    field = getattr(self.field, fname)
+                                    
+                                    # 2. 采样坐标（取整）
+                                    x, y, z = int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)
+                                    
+                                    # 3. 获取原始数值
+                                    actual_val = field[x, y, z]
+                                    
+                                    # 4. 打印对比结果
+                                    print(f"📊 [PROBE] Cell:{cell.id} at ({x},{y},{z}) | Field:{fname} | Value:{actual_val:.6f} | Threshold:{threshold}")
+                                    
+                                    # 再次确认判定逻辑
+                                    res = (actual_val > threshold)
+                                    if res:
+                                        print(f"✅ [PROBE] Logic PASSED for Cell {cell.id}")
+                                    else:
+                                        print(f"❌ [PROBE] Logic FAILED for Cell {cell.id}")
+                                        
+                        res = evaluate_condition(cond_data, cell, self)
+                        
+                        print(f"🧪 [RESULT] Cell:{cell.id} | Result: {res}")
+                        
+                        if not res:
+                            continue
+                    # 如果能走到这里，说明判定通过了
+                        print(f"🔥 [SUCCESS] 条件通过！行为: {behaviour}")
+                        
+                        plugin = self.behaviour_registry.get(behaviour)
+                        if plugin:
+                            plugin.apply(rule, case, cell)
+                            print(f"✅ [APPLY] Plugin {behaviour} 已执行")
+                        else:
+                            print(f"❌ [ERROR] 找不到插件: {behaviour}")
+
+                    except Exception as e:
+                        # ☢️ 捕获所有导致“静默消失”的罪魁祸首
+                        import traceback
+                        print(f"‼️ [CRITICAL ERROR] 逻辑在判定或执行阶段崩溃了！")
+                        print(f"错误信息: {str(e)}")
+                        # 打印具体的代码行号，看看到底死在哪一行
+                        traceback.print_exc() 
+                        continue # 发生错误也尝试继续处理下一个细胞
+
+
+
+                    '''
+                    if mcs % 10 == 0:
+                        print(f"🧪 [DEBUG 3] Cell:{cell.id} Type:{cell.type} | Cond:{case['when'].get('condition_type')} -> Result:{res}")
+
+                    print(f"🔥 [DEBUG 3] CONDITION PASSED! Cell:{cell.id} is now applying {behaviour}")
+                    # =====DEBUG========
 
                     plugin = self.behaviour_registry.get(behaviour)
                     if not plugin:
@@ -131,10 +217,13 @@ class RuleEngineSteppable(SteppableBasePy):
 
                     plugin.apply(rule, case, cell)
 
+                    print(f"📡 [POST-APPLY] Cell {cell.id} growth request is now: {cell.dict.get('requests', {}).get('growth')}")
+
                     if rule.get("once"):
                         rule["triggered"] = True
 
                     break
+                    '''
 
     # ============================================================
     # CELL DICT INIT（

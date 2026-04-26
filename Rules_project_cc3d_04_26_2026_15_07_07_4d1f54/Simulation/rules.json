@@ -1,0 +1,211 @@
+{
+  "rules": [
+    {
+      "id": "1",
+      "target": "CellA",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 1.0,
+              "field_name": "Substrate1"
+            }
+          },
+          "apply": {
+            "model": "hill",
+            "regulator": "Oxygen",
+            "parameters": {
+              "y_max": 1.0,
+              "y_min": 0.0,
+              "K": 0.5,
+              "n": 2.0
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "2",
+      "target": "CellB",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 5.0,
+              "field_name": "S2"
+            }
+          },
+          "apply": {
+            "model": "linear",
+            "regulator": "S2",
+            "parameters": {
+              "alpha": 0.1
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "2",
+      "target": "CellB",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 5.0,
+              "field_name": "S2"
+            }
+          },
+          "apply": {
+            "model": "linear",
+            "regulator": "S2",
+            "parameters": {
+              "alpha": 0.1
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    },
+    {
+      "id": "2",
+      "target": "CellB",
+      "behaviour": "growth",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Environment",
+            "params": {
+              "operator": ">",
+              "threshold": 5.0,
+              "field_name": "S2"
+            }
+          },
+          "apply": {
+            "model": "linear",
+            "regulator": "S2",
+            "parameters": {
+              "alpha": 0.1
+            }
+          }
+        }
+      ],
+      "once": false,
+      "debug": false,
+      "triggered": false
+    }
+  ],
+  "celltype_params": {
+    "Cell": {
+      "should_initialize": true,
+      "initial_count": 5,
+      "targetVolume": 50.0,
+      "lambdaVolume": 2.0
+    },
+    "CellA": {
+      "should_initialize": true,
+      "initial_count": 5,
+      "targetVolume": 50.0,
+      "lambdaVolume": 2.0
+    },
+    "CellB": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0,
+      "should_initialize": true
+    },
+    "Cellb": {
+      "targetVolume": 50.0,
+      "lambdaVolume": 10.0
+    }
+  },
+  "field_params": {
+    "Oxygen": {
+      "solver": "DiffusionSolverFE",
+      "diffusion_constant": 0.9,
+      "decay_constant": 1e-05,
+      "initial_expression": "x/100",
+      "boundary_conditions": {
+        "X": {
+          "type": "ConstantValue",
+          "min_val": 0.0,
+          "max_val": 0.0
+        },
+        "Y": {
+          "type": "ConstantDerivative",
+          "min_val": 0.0,
+          "max_val": 0.0
+        }
+      },
+      "chemotaxis": [
+        {
+          "cell_type": "Cell",
+          "lambda": 1000.0,
+          "mode": "simple",
+          "sat_coef": 0.0
+        }
+      ]
+    },
+    "Substrate1": {
+      "solver": "DiffusionSolverFE",
+      "diffusion_constant": 0.5,
+      "decay_constant": 0.0001,
+      "initial_expression": "0.0",
+      "boundary_conditions": {
+        "X": {
+          "type": "ConstantValue",
+          "min_val": 10.0,
+          "max_val": 10.0
+        },
+        "Y": {
+          "type": "Periodic"
+        },
+        "Z": {
+          "type": "Periodic"
+        }
+      },
+      "chemotaxis": [
+        {
+          "cell_type": "CellA",
+          "lambda": 100.0,
+          "mode": "saturation",
+          "sat_coef": 10.0
+        }
+      ]
+    },
+    "S2": {
+      "solver": "DiffusionSolverFE",
+      "diffusion_constant": 0.01,
+      "decay_constant": 1e-06,
+      "initial_expression": "0.0",
+      "boundary_conditions": {
+        "X": {
+          "type": "Periodic"
+        },
+        "Y": {
+          "type": "Periodic"
+        },
+        "Z": {
+          "type": "Periodic"
+        }
+      },
+      "chemotaxis": []
+    }
+  }
+}
