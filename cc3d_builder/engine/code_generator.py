@@ -4,10 +4,11 @@ from pathlib import Path
 class CC3DDecompiledGenerator:
     def __init__(self, registry):
         self.registry = registry
-        self.rules = registry.rules
+        # Ensure that the latest list of rules is retrieved from the registry.
+        self.rules = getattr(registry, 'rules', [])
 
     def generate(self):
-        # Automatically determine the parent class.
+        # 1. Automatically determine the parent class and the base structure.
         has_create = any(r.get('behaviour') == 'create' for r in self.rules)
         base_class = "MitosisSteppableBase" if has_create else "SteppableBasePy"
 
@@ -27,53 +28,62 @@ class CC3DDecompiledGenerator:
         if has_create:
             code.append("        cells_to_divide = []")
 
-        # Compile each rule into native code.
+        # 2. Compile each rule
         for rule in self.rules:
-            code.extend(self._compile_rule(rule))
+            try:
+                code.extend(self._compile_rule_to_native(rule))
+            except Exception as e:
+                print(f"Warning: {rule.get('id')}，Failed: {e}")
 
-        # Handle splitting logic
+        # 3. Post-processing after splitting (for create)
         if has_create:
             code.extend([
+                "\n        # --- Execute Cell Divisions ---",
                 "        for cell in cells_to_divide:",
                 "            self.divide_cell_random_orientation(cell)",
                 "",
                 "    def update_attributes(self):",
+                "        # Standard CC3D Mitosis handling",
                 "        self.parent_cell.targetVolume /= 2.0",
                 "        self.clone_parent_2_child()"
             ])
 
         return "\n".join(code)
 
-    def _compile_rule(self, rule):
-        target = rule.get('target', 'All').upper()
+    def _compile_rule_to_native(self, rule):
+        # Fix error points: handle cases where the target is empty.
+        target_raw = rule.get('target')
+        target = str(target_raw).upper() if target_raw else "ALL"
+        
         behaviour = rule.get('behaviour')
         indent = "        "
         
-        lines = [f"\n{indent}# --- Rule {rule.get('id')}: {behaviour} ---"]
+        lines = [f"\n{indent}# --- Compiled Rule {rule.get('id', 'N/A')} ({behaviour}) ---"]
         
-        if target == 'ALL':
+        # Generate native CC3D loops.
+        if target == "ALL" or target == "NONE":
             lines.append(f"{indent}for cell in self.cell_list:")
         else:
+            # Automatically map type constants such as self.CELLA.
             lines.append(f"{indent}for cell in self.cell_list_by_type(self.{target}):")
         
         curr_indent = indent + "    "
         for case in rule.get('cases', []):
-            # Translate the Condition directly into an if statement.
+            # A. deconstruct evaluate_condition
             cond_expr = self._decompile_condition(case.get('when', {}))
             lines.append(f"{curr_indent}if {cond_expr}:")
             
-            # Translate the Action directly into underlying API calls.
+            # B. deconstruct Plugin and Registry)
             exec_indent = curr_indent + "    "
             apply = case.get('apply', {})
             
             if behaviour == "growth":
-                # Hardcode the model logic directly into the code, without referencing MODEL_REGISTRY
                 math_logic = self._decompile_growth(apply)
-                lines.append(f"{exec_indent}# Applied {apply.get('model')} growth model")
+                lines.append(f"{exec_indent}# Pure math implementation")
                 lines.append(f"{exec_indent}cell.targetVolume += {math_logic}")
             
             elif behaviour == "differentiate":
-                to_type = apply.get('to_type', 'Medium').upper()
+                to_type = str(apply.get('to_type', 'Medium')).upper()
                 lines.append(f"{exec_indent}cell.type = self.{to_type}")
             
             elif behaviour == "create":
@@ -82,15 +92,14 @@ class CC3DDecompiledGenerator:
         return lines
 
     def _decompile_condition(self, when):
-        """Expand the logic of condition_evaluator into native Python."""
-        c_type = when.get('condition_type')
+        """Expand JSON conditions into native expressions."""
+        c_type = when.get('condition_type', "TRUE")
         p = when.get('params', {})
         
         if c_type == "Environment":
-            field = p.get('field_name')
+            field = p.get('field_name', 'Oxygen')
             op = p.get('operator', '>')
             thr = p.get('threshold', 0)
-            # visit field through self.field
             return f"self.field.{field}[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)] {op} {thr}"
         
         if c_type.startswith("Morphology"):
@@ -99,33 +108,30 @@ class CC3DDecompiledGenerator:
             thr = p.get('threshold', 0)
             return f"cell.{attr} {op} {thr}"
 
-        if c_type == "Logic_AND":
-            subs = [self._decompile_condition(c) for c in p.get('conditions', [])]
-            return f"({' and '.join(subs)})"
-
         return "True"
 
     def _decompile_growth(self, apply):
-        """Expand the logic of model_registry into mathematical expressions."""
-        model = apply.get('model')
+        """Expand the model logic into native mathematical expressions."""
+        model = apply.get('model', 'linear')
         p = apply.get('parameters', {})
         reg = apply.get('regulator')
         
         # 场采样表达式
-        reg_val = f"self.field.{reg}[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]" if reg else "1.0"
+        if reg:
+            reg_val = f"self.field.{reg}[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]"
+        else:
+            reg_val = "1.0"
 
         if model == "linear":
-            return f"{p.get('alpha', 1.0)} * {reg_val}"
+            alpha = p.get('alpha', 0.1)
+            return f"{alpha} * {reg_val}"
         
         if model == "hill":
-            # 展开 Hill 公式：y_max * (S^n / (K^n + S^n))
-            y_max = p.get('y_max', 1.0)
-            K = p.get('K', 0.5)
-            n = p.get('n', 2.0)
+            y_max, K, n = p.get('y_max', 1.0), p.get('K', 0.5), p.get('n', 2.0)
             return f"{y_max} * (({reg_val}**{n}) / ({K}**{n} + {reg_val}**{n}))"
         
         return "0.1"
 
     def save_to_file(self, folder_path):
-        p = Path(folder_path) / "DecompiledSteppables.py"
+        p = Path(folder_path) / "CompiledStepCode.py"
         p.write_text(self.generate(), encoding='utf-8')

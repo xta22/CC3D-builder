@@ -33,6 +33,9 @@
         <ChemicalField Name="Oxygen">
             <ChemotaxisByType Type="Cell" Lambda="1000.0"></ChemotaxisByType>
         </ChemicalField>
+        <ChemicalField Name="Substrate1">
+            <ChemotaxisByType Type="CellA" Lambda="100.0" SaturationCoef="10.0"></ChemotaxisByType>
+        </ChemicalField>
     </Plugin>
     <Plugin Name="Secretion">
    </Plugin>
@@ -68,6 +71,45 @@
                 <Plane Axis="Y">
                     <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
                     <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+        <DiffusionField Name="Substrate1">
+            <DiffusionData>
+                <FieldName>Substrate1</FieldName>
+                <GlobalDiffusionConstant>0.5</GlobalDiffusionConstant>
+                <GlobalDecayConstant>0.0001</GlobalDecayConstant>
+                <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantValue PlanePosition="Min" Value="10.0"></ConstantValue>
+                    <ConstantValue PlanePosition="Max" Value="10.0"></ConstantValue>
+                </Plane>
+                <Plane Axis="Y">
+                    <Periodic></Periodic>
+                </Plane>
+                <Plane Axis="Z">
+                    <Periodic></Periodic>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+        <DiffusionField Name="S2">
+            <DiffusionData>
+                <FieldName>S2</FieldName>
+                <GlobalDiffusionConstant>0.01</GlobalDiffusionConstant>
+                <GlobalDecayConstant>1e-06</GlobalDecayConstant>
+                <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <Periodic></Periodic>
+                </Plane>
+                <Plane Axis="Y">
+                    <Periodic></Periodic>
+                </Plane>
+                <Plane Axis="Z">
+                    <Periodic></Periodic>
                 </Plane>
             </BoundaryConditions>
         </DiffusionField>
