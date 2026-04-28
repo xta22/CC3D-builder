@@ -87,34 +87,35 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
                 injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
                 registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
 
-    new_fields = extract_fields_from_rule(rule)
-    print(f"DEBUG: Detected fields in this rule: {new_fields}") 
-    for f_name in new_fields:
-        print(f"CRITICAL DEBUG: Registry currently thinks these cells exist: {list(registry.celltype_params.keys())}")
+    extracted_fields = extract_fields_from_rule(rule)
+    
+    # Only process the rule when the regulator_type is explicitly set to Environment.
+    actual_new_fields = []
+    
+    # Check the condition types within the rule.
+    condition_type = rule.get('when', {}).get('condition_type')
+    
+    if condition_type == "Environment":
+        actual_new_fields = extracted_fields
+    else:
+        print(f"ℹ️ Skipping field sync for {extracted_fields} because condition type is {condition_type}")
+        actual_new_fields = []
+
+    for f_name in actual_new_fields:
         if f_name not in registry.field_params:
             if sm.ensure_field(f_name):
                 params = input_handler("field", f_name, None)
                 if params:
                     registry.add_field_params(f_name, params)
-                    print(f"✅ SUCCESSFULLY ADDED {f_name} TO REGISTRY.")
-                    if params.get('python_secretion'):
-                        auto_rule = {
-                            "id": f"python_secretion_{f_name}",
-                            "behaviour": "secretion", 
-                            "target": "specified_in_python", 
-                            "apply": {
-                                "field": f_name,
-                                "mode": "python_managed"
-                            }
-                        }
-                        if auto_rule not in registry.rules:
-                            registry.rules.append(auto_rule)
-                            print(f"[Registry] Auto-registered Python secretion rule for {f_name}")
-
             else:
-                print(f"ℹ️ Field {f_name} already exists in registry, skipping config.")
+                print(f"ℹ️ Field {f_name} already exists in registry.")
+                
+    if condition_type == "Morphology":
+        prop_name = rule.get('when', {}).get('params', {}).get('field_name') 
+        print(f"🛠️ Detecting Morphology: {prop_name}. Ensuring XML Plugins...")
+        sm.ensure_plugin("MomentOfInertia")
+
     registry.rules.append(rule)
-    print(f"🚩 REGISTRY CONTENT NOW: {registry.get_all_fields()}")
     from cc3d_builder.injector.inject import process_and_inject_rule
     process_and_inject_rule(registry.project_path, registry, rule)
 
