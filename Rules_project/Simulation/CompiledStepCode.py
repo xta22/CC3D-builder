@@ -17,3 +17,9 @@ class SimulationSteppable(SteppableBasePy):
 
         # --- Compiled Rule 3 (growth) ---
         for cell in self.cell_list_by_type(self.CELLA):
+
+        # --- Compiled Rule 1 (growth) ---
+        for cell in self.cell_list_by_type(self.CELLA):
+
+        # --- Compiled Rule 1 (growth) ---
+        for cell in self.cell_list_by_type(self.CELLA):

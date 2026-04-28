@@ -28,6 +28,7 @@ class StructureManager:
     def check_and_inject_dependencies(self, rules_json_data):
         """
         screen JSON dictionaries and inject lacking plugins to xmls
+        # could be added ...
         """
         required_plugins = set()
 

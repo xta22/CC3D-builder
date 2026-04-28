@@ -74,51 +74,68 @@ def ask_params_gui(mode, name, parent):
     return None
 
 def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
-    '''
-    input_handler: A function to retrieve parameters for new types or new fields
-    GUI: self.ask_field_params_gui
-    CLI: self.ask_field_params_cli
-    '''
+    
     new_types = extract_celltypes_from_rule(rule)
     for ct in new_types:
         if ct not in registry.celltype_params:
-            params_ct = input_handler("celltype", ct, None)
+            print(f"🐣 [New CellType] Found: {ct}. Requesting parameters...")
+            params_ct = input_handler("celltype", ct, registry)
             if params_ct:
-                injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
-                registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
+                injector.ensure_volume_start_code(
+                    ct, 
+                    params_ct['targetVolume'], 
+                    params_ct['lambdaVolume']
+                )
+                registry.add_celltype_params(
+                    ct, 
+                    params_ct['targetVolume'], 
+                    params_ct['lambdaVolume']
+                )
 
-    extracted_fields = extract_fields_from_rule(rule)
-    
-    # Only process the rule when the regulator_type is explicitly set to Environment.
-    actual_new_fields = []
-    
-    # Check the condition types within the rule.
-    condition_type = rule.get('when', {}).get('condition_type')
-    
-    if condition_type == "Environment":
-        actual_new_fields = extracted_fields
+    if 'cases' in rule and len(rule['cases']) > 0:
+        c_type = rule['cases'][0].get('when', {}).get('condition_type', "")
     else:
-        print(f"ℹ️ Skipping field sync for {extracted_fields} because condition type is {condition_type}")
-        actual_new_fields = []
+        c_type = rule.get('when', {}).get('condition_type', "")
 
-    for f_name in actual_new_fields:
-        if f_name not in registry.field_params:
-            if sm.ensure_field(f_name):
-                params = input_handler("field", f_name, None)
-                if params:
-                    registry.add_field_params(f_name, params)
-            else:
-                print(f"ℹ️ Field {f_name} already exists in registry.")
-                
-    if condition_type == "Morphology":
-        prop_name = rule.get('when', {}).get('params', {}).get('field_name') 
-        print(f"🛠️ Detecting Morphology: {prop_name}. Ensuring XML Plugins...")
-        sm.ensure_plugin("MomentOfInertia")
+    print(f"🔍 [Handle] Analyzing rule type: '{c_type}'")
 
-    registry.rules.append(rule)
+    if c_type == "Environment":
+        new_fields = extract_fields_from_rule(rule)
+        
+        for f_name in new_fields:
+            if f_name not in registry.field_params:
+                if sm.ensure_field(f_name):
+                    print(f"🧪 [New Field] Configuring diffusion for: {f_name}")
+                    params = input_handler("field", f_name, registry)
+                    if params:
+                        registry.add_field_params(f_name, params)
+    
+    elif "Morphology" in str(c_type):
+        print(f"📏 [Morphology] Detected {c_type}, skipping field check. Ensuring XML plugins...")
+        sm._ensure_plugin_exists("MomentOfInertia")
+    
+    else:
+        print(f"ℹ️ [Skip] Field check skipped for type: {c_type}")
+
+    if rule not in registry.rules:
+        registry.rules.append(rule)
+    
     from cc3d_builder.injector.inject import process_and_inject_rule
+    print(f"💉 [Inject] Generating Python code for rule {rule.get('id')}...")
     process_and_inject_rule(registry.project_path, registry, rule)
+    
+    print(f"✅ [Handle] Registration for rule {rule.get('id')} finished.\n")
 
+
+def _register_auto_secretion(registry, f_name):
+    auto_rule = {
+        "id": f"auto_sec_{f_name}",
+        "behaviour": "secretion", 
+        "target": "all", 
+        "apply": {"field": f_name, "mode": "python_managed"}
+    }
+    if not any(r.get('id') == auto_rule['id'] for r in registry.rules):
+        registry.rules.append(auto_rule)
 
 def process_custom_script(file_path, registry, ask_params_func, extract_params_func=None, existing_params=None):
     with open(file_path, 'r', encoding='utf-8') as f:

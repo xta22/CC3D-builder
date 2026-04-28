@@ -11,13 +11,26 @@ from cc3d_builder.injector.steppable_injector import SteppableInjector
 
 
 def main():    
-    user_input = input("👉 Enter CC3D Project path (containing .cc3d): ").strip()
-    user_project_path = Path(user_input)
-    
-    if not user_project_path.exists():
-        print(f"❌ Error: Project path does not exist: {user_project_path}")
-        return
-    
+    while True:
+        raw_input = input("👉 Enter CC3D Project path (containing .cc3d): ").strip()
+        
+        if not raw_input:
+            print("⚠️  Input is empty. Please provide a valid path.")
+            continue
+            
+        user_input = raw_input.replace('"', '').replace("'", "").replace('\\ ', ' ')
+        
+        user_project_path = Path(user_input).expanduser().resolve()
+        
+        if user_project_path.exists():
+            has_cc3d = any(user_project_path.glob("*.cc3d"))
+            if not has_cc3d:
+                print(f"❓ Warning: No .cc3d file found in {user_project_path}")
+            
+            print(f"📂 Resolved path: '{user_project_path}'")
+            break 
+        else:
+            print(f"❌ Error: Path does not exist: {user_project_path}")
     # Initialize ProjectManager
     # SANDBOX_DIR: "Rules_project" 
     pm = ProjectManager(SANDBOX_DIR)

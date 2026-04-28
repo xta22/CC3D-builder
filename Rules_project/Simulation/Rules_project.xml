@@ -31,33 +31,11 @@
     </Plugin>
     <Plugin Name="Chemotaxis">
         <ChemicalField Name="Oxygen">
-            <ChemotaxisByType Lambda="1000.0" Type="Cell"></ChemotaxisByType>
+            <ChemotaxisByType Type="Cell" Lambda="100.0"></ChemotaxisByType>
         </ChemicalField>
     </Plugin>
     <Plugin Name="Secretion">
    </Plugin>
-    <Steppable Type="DiffusionSolverFE">
-        <DiffusionField Name="Oxygen">
-            <DiffusionData>
-                <FieldName>Oxygen</FieldName>
-                <GlobalDiffusionConstant>0.9</GlobalDiffusionConstant>
-                <GlobalDecayConstant>1e-05</GlobalDecayConstant>
-                <InitialConcentrationExpression>x/100</InitialConcentrationExpression>
-                <DiffusionCoefficient CellType="Cell">0.9</DiffusionCoefficient>
-                <DecayCoefficient CellType="Cell">1e-05</DecayCoefficient>
-            </DiffusionData>
-            <BoundaryConditions>
-                <Plane Axis="X">
-                    <ConstantValue PlanePosition="Min" Value="0.0"></ConstantValue>
-                    <ConstantValue PlanePosition="Max" Value="1.0"></ConstantValue>
-                </Plane>
-                <Plane Axis="Y">
-                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
-                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
-                </Plane>
-            </BoundaryConditions>
-        </DiffusionField>
-    </Steppable>
     <Steppable Type="UniformInitializer">
         <Region>
             <BoxMin x="308" y="13" z="0"></BoxMin>
@@ -73,5 +51,28 @@
             <Width>5</Width>
             <Types>CellA</Types>
         </Region>
+    </Steppable>
+    <Plugin Name="MomentOfInertia"></Plugin>
+    <Steppable Type="DiffusionSolverFE">
+        <DiffusionField Name="Oxygen">
+            <DiffusionData>
+                <FieldName>Oxygen</FieldName>
+                <GlobalDiffusionConstant>0.9</GlobalDiffusionConstant>
+                <GlobalDecayConstant>1e-05</GlobalDecayConstant>
+                <InitialConcentrationExpression>x/100</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantValue PlanePosition="Min" Value="10.0"></ConstantValue>
+                    <ConstantValue PlanePosition="Max" Value="0.0"></ConstantValue>
+                </Plane>
+                <Plane Axis="Y">
+                    <Periodic></Periodic>
+                </Plane>
+                <Plane Axis="Z">
+                    <Periodic></Periodic>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
     </Steppable>
 </CompuCell3D>

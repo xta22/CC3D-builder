@@ -213,14 +213,19 @@ class MainWindow(QWidget):
         if not result:
             return
 
-        behaviour, params = result
-        rule = build_rule(behaviour, params)
+        behaviour, params = result # Destructure behaviour and params.
+        
+        # Construct a unified rule dictionary instead of passing only params.
+        standard_rule = {
+            "behaviour": behaviour,
+            **params  #  Expand all parameters (id, target, when, apply, etc.).
+        }
         
         try:
             handle_new_rule_registration(
                 self.registry, 
-                rule, 
-                lambda m, n: ask_params_gui(m, n, self),
+                standard_rule, 
+                lambda m, n, _: ask_params_gui(m, n, self), # 注意：handler可能需要3个参数(m, n, registry)
                 self.sm,
                 self.injector 
             )
@@ -228,11 +233,10 @@ class MainWindow(QWidget):
             QMessageBox.critical(self, "Error", f"Registration failed:\n{str(e)}")
             return
     
-        
         self.refresh_list()
         QMessageBox.information(
             self, "Success",
-            f"Rule {params['id']} added and injected successfully!"
+            f"Rule added and injected successfully!"
         )
 
     # ============================================================

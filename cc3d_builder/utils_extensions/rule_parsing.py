@@ -51,19 +51,23 @@ def extract_fields_from_rule(rule: dict) -> list:
     read only -- Search for field_name in rule dict
     """
     found_fields = set()
+    if 'cases' in rule and len(rule['cases']) > 0:
+        when_cfg = rule['cases'][0].get('when', {})
+    else:
+        when_cfg = rule.get('when', {})
+        
+    c_type = when_cfg.get('condition_type') or when_cfg.get('type')
 
-    def _search(obj):
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                if k in ["field_name", "regulator", "field"]:
-                    if isinstance(v, str):
-                        found_fields.add(v)
-                else:
-                    _search(v)
-        elif isinstance(obj, list):
-            for item in obj:
-                _search(item)
+    if c_type == "Environment":
+        f_name = when_cfg.get('params', {}).get('field_name')
+        if f_name:
+            found_fields.add(f_name)
 
-    _search(rule)
-    # filter the built-in field ???
-    return list(found_fields)
+    if c_type == "Environment":
+        regulator = rule.get('apply', {}).get('regulator')
+        if regulator and isinstance(regulator, str):
+            found_fields.add(regulator)
+
+    built_in = ["elongation", "volume", "surface", "none", "nan"]
+    return [f for f in found_fields if f.lower() not in built_in]
+
