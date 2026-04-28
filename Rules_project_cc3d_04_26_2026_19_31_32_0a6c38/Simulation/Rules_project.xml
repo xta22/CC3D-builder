@@ -34,38 +34,36 @@
         <Energy Type1="CellA" Type2="CellB">10.0</Energy>
         <Energy Type1="CellB" Type2="CellB">10.0</Energy>
     </Plugin>
+    <Plugin Name="Chemotaxis">
+        <ChemicalField Name="Oxygen">
+            <ChemotaxisByType Type="Cell" Lambda="1000.0"></ChemotaxisByType>
+        </ChemicalField>
+    </Plugin>
+    <Plugin Name="Secretion">
+   </Plugin>
     <Steppable Type="UniformInitializer">
         <Region>
-            <BoxMin x="342" y="65" z="0"></BoxMin>
-            <BoxMax x="355" y="78" z="1"></BoxMax>
+            <BoxMin x="176" y="275" z="0"></BoxMin>
+            <BoxMax x="189" y="288" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>Cell</Types>
         </Region>
         <Region>
-            <BoxMin x="87" y="306" z="0"></BoxMin>
-            <BoxMax x="100" y="319" z="1"></BoxMax>
+            <BoxMin x="371" y="193" z="0"></BoxMin>
+            <BoxMax x="384" y="206" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>CellA</Types>
         </Region>
         <Region>
-            <BoxMin x="208" y="206" z="0"></BoxMin>
-            <BoxMax x="221" y="219" z="1"></BoxMax>
+            <BoxMin x="362" y="151" z="0"></BoxMin>
+            <BoxMax x="375" y="164" z="1"></BoxMax>
             <Gap>0</Gap>
             <Width>5</Width>
             <Types>CellB</Types>
         </Region>
     </Steppable>
-    <Plugin Name="Chemotaxis">
-        <ChemicalField Name="Oxygen">
-            <ChemotaxisByType Type="Cell" Lambda="1000.0"></ChemotaxisByType>
-        </ChemicalField>
-        <ChemicalField Name="elongation">
-            <ChemotaxisByType Type="Cell" Lambda="0.0"></ChemotaxisByType>
-            <ChemotaxisByType Type="CellA" Lambda="0.0"></ChemotaxisByType>
-        </ChemicalField>
-    </Plugin>
     <Steppable Type="DiffusionSolverFE">
         <DiffusionField Name="Oxygen">
             <DiffusionData>
@@ -85,13 +83,25 @@
                 </Plane>
             </BoundaryConditions>
         </DiffusionField>
-        <DiffusionField Name="elongation">
+        <DiffusionField Name="S">
             <DiffusionData>
-                <FieldName>elongation</FieldName>
-                <GlobalDiffusionConstant>0.1</GlobalDiffusionConstant>
-                <GlobalDecayConstant>0.0</GlobalDecayConstant>
+                <FieldName>S</FieldName>
+                <GlobalDiffusionConstant>0.01</GlobalDiffusionConstant>
+                <GlobalDecayConstant>0.0001</GlobalDecayConstant>
                 <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
             </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantValue PlanePosition="Min" Value="5.0"></ConstantValue>
+                    <ConstantValue PlanePosition="Max" Value="0.0"></ConstantValue>
+                </Plane>
+                <Plane Axis="Y">
+                    <Periodic></Periodic>
+                </Plane>
+                <Plane Axis="Z">
+                    <Periodic></Periodic>
+                </Plane>
+            </BoundaryConditions>
         </DiffusionField>
     </Steppable>
 </CompuCell3D>

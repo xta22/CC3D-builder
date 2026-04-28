@@ -2,12 +2,13 @@
 import sys
 from pathlib import Path
 from cc3d_builder.utils_extensions.paths import RULES_JSON, SIMULATION_DIR, SANDBOX_DIR
-from cc3d_builder.cli.cli_interface import cli_add_rule
+from cc3d_builder.cli.cli_interface import cli_add_rule, cli_import_csv
 from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 from cc3d_builder.utils_extensions.utils import ask_params_cli, handle_new_rule_registration
 from cc3d_builder.core.structure_manager import StructureManager
 from cc3d_builder.core.project_manager import ProjectManager
 from cc3d_builder.injector.steppable_injector import SteppableInjector
+
 
 def main():    
     user_input = input("👉 Enter CC3D Project path (containing .cc3d): ").strip()
@@ -42,6 +43,11 @@ def main():
     registry = SimulationRegistry(SANDBOX_DIR, structure_manager=sm)
     print(f"🔄 Loading registry from sandbox: {SANDBOX_DIR}")
     registry.load()
+
+    if len(sys.argv) > 1:
+        csv_file = sys.argv[1]
+        cli_import_csv(csv_file, registry, sm, injector)
+        sys.exit(0) #Exit after import.
 
     rule = cli_add_rule(registry, sm, injector)
 

@@ -29,38 +29,45 @@ class SteppableInjector:
     # =============================
 
     def _insert_into_start(self, content, block_lines, marker):
-
         full_marker_start = f"# === {marker} START ==="
-        if full_marker_start in content:
-            print(f"[Injector] {marker} already exists")
-            return content
+        full_marker_end = f"# === {marker} END ==="
         
         lines = content.splitlines()
+        
+        if full_marker_start in content:
+            print(f"[Injector] Updating existing marker: {marker}")
+            new_lines = []
+            skip = False
+            for line in lines:
+                if full_marker_start in line:
+                    skip = True
+                    base_indent = len(line) - len(line.lstrip())
+                    indent = " " * base_indent
+                    new_lines.append(f"{indent}{full_marker_start}")
+                    for bl in block_lines:
+                        new_lines.append(indent + bl)
+                    new_lines.append(f"{indent}{full_marker_end}")
+                    continue
+                if full_marker_end in line:
+                    skip = False
+                    continue
+                if not skip:
+                    new_lines.append(line)
+            return "\n".join(new_lines)
+
         new_lines = []
         inserted = False
-
         for line in lines:
-
             new_lines.append(line)
-
             if line.strip().startswith("def start") and not inserted:
-
                 base_indent = len(line) - len(line.lstrip())
                 indent = " " * (base_indent + 4)
-
-                new_lines.append(f"{indent}# === {marker} START ===")
-
+                new_lines.append(f"{indent}{full_marker_start}")
                 for bl in block_lines:
                     new_lines.append(indent + bl)
-
-                new_lines.append(f"{indent}# === {marker} END ===")
-
+                new_lines.append(f"{indent}{full_marker_end}")
                 inserted = True
 
-        if not inserted:
-            print(f"⚠️ [Warning] Could not find start() function in {self.steppable_path.name}")
-            return content
-            
         return "\n".join(new_lines)
 
     # =============================

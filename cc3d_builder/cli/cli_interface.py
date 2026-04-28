@@ -1,6 +1,8 @@
 # cli_interface.py
-
+import sys
+from pathlib import Path
 from cc3d_builder.core.rule_builder import build_rule
+from cc3d_builder.core.csv_importer import import_rules_from_csv
 from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
 from cc3d_builder.utils_extensions.utils import handle_new_rule_registration, ask_params_cli
 
@@ -292,6 +294,48 @@ def cli_add_rule(registry, sm, injector):
 
     rule = build_rule(behaviour, params)
 
-    handle_new_rule_registration(registry, rule, lambda m, n: ask_params_cli(m, n, registry), sm, injector)
+    handle_new_rule_registration(registry, rule, lambda m, n, _:ask_params_cli(m, n, registry), sm, injector)
     
     return rule
+
+def transform_csv_row_to_standard_rule(behavior_type, params):
+    """
+    Convert the CSV tuple format into the system’s unified rule dictionary structure.
+    """
+    standard_rule = {
+        "behaviour": behavior_type,
+        **params  
+    }
+    return standard_rule
+
+def cli_import_csv(csv_path, registry, sm, injector):
+    print(f"📂 Importing rules from: {csv_path}...")
+    
+    # 1. [('growth', {...}), ...]
+    raw_results = import_rules_from_csv(csv_path)
+    
+    if not raw_results:
+        print("⚠️ No valid rules found in CSV.")
+        return
+
+    for behavior_type, params in raw_results:
+        standard_rule = transform_csv_row_to_standard_rule(behavior_type, params)
+        
+        try:
+            handle_new_rule_registration(
+                registry, 
+                standard_rule, 
+                ask_params_cli,
+                sm,
+                injector 
+            )
+            print(f"✅ Rule for {standard_rule.get('target')} synced.")
+            
+        except Exception as e:
+            print(f"❌ Error syncing rule: {e}")
+            continue
+
+    registry.save()
+    sm.save()
+    print(f"🚀 Successfully imported {len(raw_results)} rules and synced everything!")
+

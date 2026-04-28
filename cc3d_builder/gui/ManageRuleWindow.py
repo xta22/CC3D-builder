@@ -233,19 +233,20 @@ class ManageRulesWindow(QWidget):
                     sm = self.sm,
                     injector = self.injector,
                 )
-                elif col == 3: 
-                    rule["frequency"] = int(item.text().strip())
-                elif col == 6: 
-                    rule["once"] = (item.checkState() == Qt.Checked)
                     
-                elif col == 7: # Custom Script Path
-                    raw_path = item.text().strip()
-                    rule["custom_script"] = Path(raw_path).as_posix() if raw_path != "None" else "None"
-                    
-                self.registry.update_rule(rule_id, rule)
-                self.field_manager.refresh_table()
-                self.save_and_sync() 
-                print(f"✅ Auto-saved inline edit for Rule {rule_id}")
+            elif col == 3: 
+                rule["frequency"] = int(item.text().strip())
+            elif col == 6: 
+                rule["once"] = (item.checkState() == Qt.Checked)
+                
+            elif col == 7: # Custom Script Path
+                raw_path = item.text().strip()
+                rule["custom_script"] = Path(raw_path).as_posix() if raw_path != "None" else "None"
+                
+            self.registry.update_rule(rule_id, rule)
+            self.field_manager.refresh_table()
+            self.save_and_sync() 
+            print(f"✅ Auto-saved inline edit for Rule {rule_id}")
 
             # self.registry.save()
             
@@ -379,19 +380,48 @@ class ManageRulesWindow(QWidget):
             self.table.selectRow(new_row)
 
     def save_and_sync(self):
+        """
+        Synchronizes the UI Registry data with the physical simulation files (XML and Python).
+        This acts as the bridge between the GUI memory and the CC3D source code.
+        """
+        # 1. Persist the current Registry state to the rules.json file
         self.registry.save()
             
         try:
             if hasattr(self, 'structure_manager'):
-                print("🚀 Using StructureManager for precise XML sync...")
+                print("🚀 Using StructureManager for precise file synchronization...")
+                
+                # 2. Synchronize Environment Fields (XML)
+                # This updates diffusion constants, decay, etc., in the .xml file
                 self.structure_manager.ensure_field_xml_from_registry(self.registry.field_params)
+
+                # 3. Synchronize Cell Parameters (Python Steppable)
+                # We iterate through all cell types defined in the registry.
+                # For each type, we force-rewrite the 'start()' block in the Steppables.py file.
+                for cell_name, params in self.registry.celltype_params.items():
+                    target_vol = params.get("targetVolume", 50.0)
+                    lambda_vol = params.get("lambdaVolume", 2.0)
+                    
+                    # This triggers the code injector to find the specific marker 
+                    # and update the hard-coded values with the latest Registry values.
+                    self.injector.ensure_volume_start_code(
+                        celltype_name=cell_name,
+                        target_volume=target_vol,
+                        lambda_volume=lambda_vol
+                    )
+                # 4. Commit all changes to the disk
                 self.structure_manager.save()
+                print("✅ [Sync Success] XML and Python source code updated from Registry.")
+                
             else:
+                # Fallback to basic XML export if StructureManager is unavailable
                 self.registry.export_to_xml() 
                 
         except Exception as e:
-            print(f"Export XML Error: {e}")
+            # Log any errors during the file writing process
+            print(f"❌ [Sync Error] Failed to rebuild simulation files: {e}")
 
+        # 5. Refresh the Main Editor UI list to reflect any internal changes
         if self.main_editor and hasattr(self.main_editor, 'refresh_list'):
             self.main_editor.refresh_list()
 
@@ -479,6 +509,7 @@ class CellInventoryWidget(QGroupBox):
     def __init__(self, registry: 'SimulationRegistry', on_changed_callback=None, ask_cell_func=None, main_editor = None):
         super().__init__("🧬 Cell Initialization Manager")
         self.registry = registry
+        self.ask_cell_func = ask_cell_func
         self.on_changed_callback = on_changed_callback
         self.main_layout = QVBoxLayout(self)
         self.main_editor = main_editor
@@ -494,14 +525,29 @@ class CellInventoryWidget(QGroupBox):
     def refresh_list(self):
         while self.form_layout.count() > 0:
             item = self.form_layout.takeAt(0)
-            if item: 
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-        # for i in reversed(range(self.form_layout.count())): 
-        #    self.form_layout.itemAt(i).widget().setParent(None)
+            if item and item.widget():
+                item.widget().deleteLater()
 
+        # 2. iterate celltypes
         for name, params in self.registry.celltype_params.items():
+            name_label = QPushButton(f" {name}")
+            name_label.setStyleSheet("""
+                QPushButton {
+                    text-align: left; 
+                    font-weight: bold; 
+                    color: #2196F3; 
+                    border: none; 
+                    text-decoration: underline;
+                    background: transparent;
+                    padding: 0px;
+                }
+                QPushButton:hover { color: #0b7dda; }
+            """)
+            name_label.setCursor(Qt.PointingHandCursor)
+            
+            # Bind a click event to call the popup function.
+            name_label.clicked.connect(lambda _, n=name: self.open_cell_params_dialog(n))
+
             row_widget = QWidget()
             row_layout = QHBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 0, 0, 0)
@@ -518,7 +564,8 @@ class CellInventoryWidget(QGroupBox):
             row_layout.addWidget(cb)
             row_layout.addWidget(sb)
             
-            self.form_layout.addRow(f"<b>{name}</b>:", row_widget)
+            # --- add the name_label button as the left column of the form ---
+            self.form_layout.addRow(name_label, row_widget)
 
     def _update_init(self, name, state):
         self.registry.celltype_params[name]["should_initialize"] = (state == Qt.Checked)
@@ -533,6 +580,32 @@ class CellInventoryWidget(QGroupBox):
         if self.on_changed_callback:
             self.on_changed_callback() 
 
+    def open_cell_params_dialog(self, cell_name):
+        """Pop up the same parameter configuration interface that you used when creating a new cell."""
+        editor = self.main_editor
+        
+        if not editor:
+            parent_win = self.window()
+            if hasattr(parent_win, 'main_editor') and parent_win.main_editor:
+                editor = parent_win.main_editor
+                self.main_editor = editor
+
+        if not self.main_editor or not hasattr(self.main_editor, 'ask_params_gui'):
+            print("❌ Error: main_editor or ask_params_gui reference missing!")
+            return
+        
+        # apply the ask_params functions
+        new_params = self.main_editor.ask_params_gui("celltype", cell_name, self.main_editor)
+        
+        if new_params:
+            # update the parameters in registry
+            self.registry.celltype_params[cell_name].update({
+                "targetVolume": new_params.get("targetVolume", 50.0),
+                "lambdaVolume": new_params.get("lambdaVolume", 2.0)
+            })
+            
+            self._sync()
+            QMessageBox.information(self, "Success", f"Parameters for {cell_name} updated!")
 
 #  for custom scripts parameter modification in MainRuleWindow 
 class ParamEditorDialog(QDialog):

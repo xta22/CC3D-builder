@@ -43,7 +43,7 @@ class RuleEngineSteppable(SteppableBasePy):
         project_dir = Path(self.simulator.getBasePath())
         rules_path = project_dir / "Simulation" / "rules.json"
         
-        print(f"🔍 [DEBUG 1] Loading rules from: {rules_path}")
+        # print(f"🔍 [DEBUG 1] Loading rules from: {rules_path}")
         if not rules_path.exists():
             print(f"ℹ️ [RuleEngine] No rules.json found at {rules_path}")
             return
@@ -52,7 +52,7 @@ class RuleEngineSteppable(SteppableBasePy):
             data = json.load(f)
 
         self.rules = data.get("rules", [])
-        print(f"✅ [DEBUG 1] Rules loaded. Count: {len(self.rules)}")
+        # print(f"✅ [DEBUG 1] Rules loaded. Count: {len(self.rules)}")
         self.celltype_params = data.get("celltype_params", {})
 
     # ============================================================
@@ -60,11 +60,11 @@ class RuleEngineSteppable(SteppableBasePy):
     # ============================================================
 
     def step(self, mcs):
-        print(f"DEBUG: MCS {mcs}, Number of rules: {len(self.rules)}")
+        # print(f"DEBUG: MCS {mcs}, Number of rules: {len(self.rules)}")
         self.current_mcs = mcs
 
         for rule in self.rules:
-            print(f"Rule ID: {rule.get('id')}, Triggered: {rule.get('triggered')}")
+            # print(f"Rule ID: {rule.get('id')}, Triggered: {rule.get('triggered')}")
             freq = rule.get("frequency", 1)
             if mcs % freq != 0:
                 continue
