@@ -130,7 +130,6 @@ class SimulationRegistry:
             generator = CC3DDecompiledGenerator(self)
             generator.save_to_file(self.project_path / "Simulation")
             target_dir = self.project_path / "Simulation"
-            print(f"DEBUG: Generator 尝试写入的绝对路径: {target_dir.resolve()}") # <--- 关键
             print("🚀 [Generator] Steppables.py has been re-compiled.")
         except Exception as e:
             print(f"❌ [Generator] Failed to compile rules: {e}")
