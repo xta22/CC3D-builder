@@ -74,49 +74,45 @@ def ask_params_gui(mode, name, parent):
     return None
 
 def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
-    
+
+    # 1. Handle new cell types (unchanged, since cell_type extraction is usually reliable)
     new_types = extract_celltypes_from_rule(rule)
     for ct in new_types:
         if ct not in registry.celltype_params:
             print(f"🐣 [New CellType] Found: {ct}. Requesting parameters...")
             params_ct = input_handler("celltype", ct, registry)
             if params_ct:
-                injector.ensure_volume_start_code(
-                    ct, 
-                    params_ct['targetVolume'], 
-                    params_ct['lambdaVolume']
-                )
-                registry.add_celltype_params(
-                    ct, 
-                    params_ct['targetVolume'], 
-                    params_ct['lambdaVolume']
-                )
+                injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
+                registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
 
-    if 'cases' in rule and len(rule['cases']) > 0:
-        c_type = rule['cases'][0].get('when', {}).get('condition_type', "")
-    else:
-        c_type = rule.get('when', {}).get('condition_type', "")
-
-    print(f"🔍 [Handle] Analyzing rule type: '{c_type}'")
-
-    if c_type == "Environment":
-        new_fields = extract_fields_from_rule(rule)
-        
-        for f_name in new_fields:
+    # 2. Global field scanning (no longer relying on c_type, but directly inspecting fields in the rule)
+    # extract_fields_from_rule should internally scan when.field_name and apply.regulator
+    new_fields = extract_fields_from_rule(rule)
+    
+    # Define keywords to exclude (morphology, contact logic, etc.)
+    # These may appear in regulator positions but are NOT diffusion fields
+    morph_keywords = ["elongation", "contact", "distance", "sphericity", "surface"]
+    
+    for f_name in new_fields:
+        # Only trigger configuration if not excluded and not already registered
+        if f_name.lower() not in morph_keywords:
             if f_name not in registry.field_params:
+                print(f"🧪 [New Field Detected] Found: {f_name}. Checking XML/Registry...")
+                # sm.ensure_field ensures the base XML tags exist
                 if sm.ensure_field(f_name):
-                    print(f"🧪 [New Field] Configuring diffusion for: {f_name}")
+                    print(f"⚙️ [Configure] Opening diffusion setup for: {f_name}")
                     params = input_handler("field", f_name, registry)
                     if params:
                         registry.add_field_params(f_name, params)
-    
-    elif "Morphology" in str(c_type):
-        print(f"📏 [Morphology] Detected {c_type}, skipping field check. Ensuring XML plugins...")
-        sm._ensure_plugin_exists("MomentOfInertia")
-    
-    else:
-        print(f"ℹ️ [Skip] Field check skipped for type: {c_type}")
+        else:
+            # If it's a morphology keyword, ensure required XML plugins exist
+            print(f"📏 [Morphology/Logic] '{f_name}' detected. Ensuring XML plugins...")
+            if f_name.lower() == "elongation":
+                sm._ensure_plugin_exists("MomentOfInertia")
+            elif f_name.lower() == "contact":
+                sm._ensure_plugin_exists("Contact")
 
+    # 3. Injection and persistence (unchanged)
     if rule not in registry.rules:
         registry.rules.append(rule)
     
@@ -125,7 +121,6 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
     process_and_inject_rule(registry.project_path, registry, rule)
     
     print(f"✅ [Handle] Registration for rule {rule.get('id')} finished.\n")
-
 
 def _register_auto_secretion(registry, f_name):
     auto_rule = {

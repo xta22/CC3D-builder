@@ -121,6 +121,10 @@ class SimulationRegistry:
                 "celltype_params": self.celltype_params,
                 "field_params": self.field_params
             }, f, indent=2)
+        
+        if self.sm:
+            print("🔍 [Registry] Checking XML dependencies for all rules...")
+            self.sm.check_and_inject_dependencies({"rules": self.rules})
 
         try:
             generator = CC3DDecompiledGenerator(self)

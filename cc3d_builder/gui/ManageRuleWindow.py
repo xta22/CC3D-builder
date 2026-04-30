@@ -286,7 +286,6 @@ class ManageRulesWindow(QWidget):
         elif col == 5:
             new_data = None
             if beh == "growth":
-                from gui.build_model_gui import build_model_gui
                 res = build_model_gui(beh)
                 if res: new_data = res 
             elif beh == "differentiate":
@@ -438,7 +437,7 @@ class ManageRulesWindow(QWidget):
 
     def build_condition_gui(self):
         # explicitly import 
-        from gui.build_condition_gui import build_condition_gui as real_builder
+        from cc3d_builder.gui.build_condition_gui import build_condition_gui as real_builder
         return real_builder(self)
     
     def get_file_path(self):

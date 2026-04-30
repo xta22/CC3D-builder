@@ -27,13 +27,36 @@ class StructureManager:
 
     def check_and_inject_dependencies(self, rules_json_data):
         """
-        screen JSON dictionaries and inject lacking plugins to xmls
-        # could be added ...
+        Scan JSON rules and automatically inject any missing XML plugins.
         """
         required_plugins = set()
+        
+        SHAPE_KEYWORDS = ["elongation", "eccentricity", "sphericity", "morphology"]
 
         for rule in rules_json_data.get("rules", []):
             when_config = rule.get("when", {})
+            cond_type = str(when_config.get("condition_type", "")).lower()
+       
+            regulators = []
+            cases = rule.get("cases", [])
+            if cases:
+                for case in cases:
+                    reg = case.get("apply", {}).get("regulator")
+                    if reg: regulators.append(str(reg).lower())
+            else:
+                reg = rule.get("apply", {}).get("regulator")
+                if reg: regulators.append(str(reg).lower())
+
+            if any(kw in cond_type for kw in SHAPE_KEYWORDS) or \
+               any(any(kw in r for kw in SHAPE_KEYWORDS) for r in regulators):
+                required_plugins.add("MomentOfInertia")
+
+            # if "contact" in cond_type or any("contact" in r for r in regulators):
+            #     required_plugins.add("Contact")
+
+            if "neighbor" in cond_type or any("neighbor" in r for r in regulators):
+                required_plugins.add("NeighborTracker")
+
             if when_config.get("type") == "custom_condition":
                 script = when_config.get("script_path", "")
                 if script in self.DEPENDENCY_MAP:
@@ -51,19 +74,24 @@ class StructureManager:
                 
         if modified:
             self.save()
+            print(f"🧩 [Structure Manager] Logic scanned. Injected: {required_plugins}")
 
     def _ensure_plugin_exists(self, plugin_name):
         """
+        Ensure that the plugin exists in the XML tree.
         """
+        # avoid repeating
         for plugin_element in self.root.findall('Plugin'):
             if plugin_element.get('Name') == plugin_name:
                 return False 
 
-        print(f"🧩 [Structure Manager] inject lacking plugins: <Plugin Name=\"{plugin_name}\"/>")
+        print(f"✨ [Structure Manager] Adding lacking plugin to XML: <Plugin Name=\"{plugin_name}\"/>")
         new_plugin = ET.Element('Plugin', Name=plugin_name)
         
-        self.root.append(new_plugin)
-        return True # DOM tree is modified
+        # if plugin_name == "MomentOfInertia": pass
+
+        self.root.insert(2, new_plugin)
+        return True
     # ============================================================
     # ENTRY POINT inject rule
     # ============================================================

@@ -14,7 +14,8 @@ import numpy as np
 class ConstraintInitializerSteppable(SteppableBasePy):
     def __init__(self,frequency=1):
         SteppableBasePy.__init__(self,frequency)
-
+        self.engine = engine
+        
     def start(self):
         # === CC3D_VOLUME_CELLB START ===
         for cell in self.cell_list_by_type(self.CELLB):
@@ -39,7 +40,5 @@ class ConstraintInitializerSteppable(SteppableBasePy):
                 cell.dict["_internal"] = {}
         # === CC3D_DICT_INIT END ===
 
-        ## mark from original
-
     def step(self, mcs):
-        return
+        pass

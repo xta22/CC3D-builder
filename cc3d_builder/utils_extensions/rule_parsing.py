@@ -1,5 +1,6 @@
 # cc3d_builder/utils_extensions/rule_parsing.py
 import re
+import pandas as pd
 
 def extract_celltypes_from_rule(rule):
     """
@@ -46,28 +47,41 @@ def extract_params(content):
     return unique_params
 
   
-def extract_fields_from_rule(rule: dict) -> list:
+def extract_fields_from_rule(rule):
     """
-    read only -- Search for field_name in rule dict
+    screen all places possibly storing fields
     """
-    found_fields = set()
-    if 'cases' in rule and len(rule['cases']) > 0:
-        when_cfg = rule['cases'][0].get('when', {})
-    else:
-        when_cfg = rule.get('when', {})
+    raw_fields = set()
+    
+    # # Any term listed here will NOT be treated as a Diffusion Field
+    INTERNAL_KEYWORDS = {
+        "elongation", "sphericity", "surface", "contact", 
+        "distance", "volume", "area", "none", "nan", "true", "false"
+    }
+
+    for case in rule.get('cases', []):
+        when = case.get('when', {})
+        params = when.get('params', {})
         
-    c_type = when_cfg.get('condition_type') or when_cfg.get('type')
-
-    if c_type == "Environment":
-        f_name = when_cfg.get('params', {}).get('field_name')
+        f_name = params.get('field_name') or when.get('field_name')
         if f_name:
-            found_fields.add(f_name)
+            raw_fields.add(str(f_name).strip())
 
-    if c_type == "Environment":
-        regulator = rule.get('apply', {}).get('regulator')
-        if regulator and isinstance(regulator, str):
-            found_fields.add(regulator)
+        apply = case.get('apply', {})
+        reg = apply.get('regulator')
+        if reg:
+            raw_fields.add(str(reg).strip())
 
-    built_in = ["elongation", "volume", "surface", "none", "nan"]
-    return [f for f in found_fields if f.lower() not in built_in]
-
+    valid_fields = []
+    for f in raw_fields:
+        f_str = str(f).lower()
+        
+        if pd.isna(f) or f_str == "nan" or f_str == "":
+            continue
+            
+        if f_str in INTERNAL_KEYWORDS:
+            continue
+            
+        valid_fields.append(f)
+        
+    return valid_fields

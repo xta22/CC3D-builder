@@ -1,3 +1,4 @@
+# main_editor.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QListWidget, QPushButton, QDialog,
     QInputDialog, QApplication, QMessageBox, QFileDialog
@@ -485,7 +486,7 @@ class MainWindow(QWidget):
         final_params = process_custom_script(
             file_path = str(file_path),
             registry = self.registry,
-            ask_params_func = lambda m, n: ask_params_gui(m, n, self),
+            ask_params_func = lambda param_list: ask_params_gui("", param_list, self),
             extract_params_func = extract_params,    
             existing_params = None
         )

@@ -66,48 +66,6 @@
       },
       "once": false,
       "debug": false
-    },
-    {
-      "behaviour": "growth",
-      "id": "1",
-      "target": "CellA",
-      "when": {
-        "condition_type": "TimeWindow",
-        "params": {
-          "start_mcs": 0,
-          "end_mcs": 1000
-        }
-      },
-      "apply": {
-        "model": "linear",
-        "regulator": NaN,
-        "parameters": {
-          "alpha": 0.5
-        }
-      },
-      "once": true,
-      "debug": false
-    },
-    {
-      "behaviour": "growth",
-      "id": "1",
-      "target": "CellA",
-      "when": {
-        "condition_type": "TimeWindow",
-        "params": {
-          "start_mcs": 0,
-          "end_mcs": 1000
-        }
-      },
-      "apply": {
-        "model": "linear",
-        "regulator": NaN,
-        "parameters": {
-          "alpha": 0.5
-        }
-      },
-      "once": true,
-      "debug": false
     }
   ],
   "celltype_params": {
@@ -136,25 +94,24 @@
       "diffusion_constant": 0.9,
       "decay_constant": 1e-05,
       "initial_expression": "x/100",
-      "python_secretion": false,
       "boundary_conditions": {
         "X": {
           "type": "ConstantValue",
-          "min_val": 10.0,
+          "min_val": 0.0,
           "max_val": 0.0
         },
         "Y": {
-          "type": "Periodic"
-        },
-        "Z": {
-          "type": "Periodic"
+          "type": "ConstantDerivative",
+          "min_val": 0.0,
+          "max_val": 0.0
         }
       },
       "chemotaxis": [
         {
           "cell_type": "Cell",
-          "lambda": 100.0,
-          "mode": "regular"
+          "lambda": 1000.0,
+          "mode": "simple",
+          "sat_coef": 0.0
         }
       ]
     }

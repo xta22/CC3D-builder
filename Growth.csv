@@ -1,4 +1,4 @@
 id,behaviour,target,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,model,alpha,y_min,y_max,k,n,expression,once,debug
-1,growth,CellA,time_window,,0.0,1000.0,,,,,linear,0.5,,,,,,True,False
-2,growth,CellB,threshold,,,0.5,Environment,Oxygen,<,0.2,hill,,0.0,2.0,0.5,4.0,,False,True
-3,growth,CellA,condition,,,0.8,Morphology,elongation,>,2.0,expression,,,,,,0.01 * Oxygen,False,False
+1,growth,CellA,time_window,,0,1000,,,,,linear,0.5,,,,,,TRUE,FALSE
+2,growth,CellB,threshold,,,0.5,Environment,Oxygen,<,0.2,hill,,0,2,0.5,4,,FALSE,TRUE
+3,growth,CellA,condition,,,0.8,Morphology,elongation,>,2,expression,,,,,,0.01 * Oxygen,FALSE,FALSE

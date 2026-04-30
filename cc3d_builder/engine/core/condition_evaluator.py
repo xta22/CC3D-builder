@@ -4,6 +4,11 @@ from pathlib import Path
 import importlib.util
 
 def evaluate_single_condition(cond, cell, engine):
+    if cell is None:
+        cond_type = cond.get("condition_type", cond.get("type"))
+        if cond_type == "Environment":
+            return False
+        
     cond_type = cond.get("condition_type", cond.get("type"))
     p = cond.get("params", cond)
 
@@ -12,7 +17,7 @@ def evaluate_single_condition(cond, cell, engine):
 
     # --- Environment Condition ---
     elif cond_type == "Environment":
-        field_name = p.get("field_name")
+        field_name = p.get("field_name", "").strip()
         operator = p.get("operator", ">")
         threshold = float(p.get("threshold", 0.0))
 
@@ -20,12 +25,23 @@ def evaluate_single_condition(cond, cell, engine):
             print("[Environment Error] field_name missing")
             return False
 
-        # get field value from enging
+        field = None
+        field = getattr(engine.field, field_name, None)
+        
+        if field is None:
+            field = engine.get_field_secretor(field_name)
+
+        if field is None:
+            print(f"[Environment Error] Field '{field_name}' not found. Available: {dir(engine.field)}")
+            return False
+
         try:
-            field = getattr(engine.field, field_name)
-            val = field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
-        except AttributeError:
-            print(f"[Environment Error] Field {field_name} not found in engine.field")
+            if cell:
+                val = field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
+            else:
+                return False
+        except Exception as e:
+            print(f"[Environment Error] Failed to sample field '{field_name}' at cell {cell.id}: {e}")
             return False
 
         # logic comparison
@@ -110,7 +126,6 @@ def evaluate_single_condition(cond, cell, engine):
             ">=": lambda a,b: a>=b, "<=": lambda a,b: a<=b}
         return ops.get(op, lambda a,b: False)(val, thr)
 
-    
     elif cond_type == "Custom":
         script_path_str = cond.get("script_path")
         if not script_path_str:
