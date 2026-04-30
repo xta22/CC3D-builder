@@ -48,9 +48,9 @@ def process_and_inject_rule(project_path, registry, rule):
     legacy_fields = sm.migrate_field_data()
 
     legacy_sub = legacy_volumes.get('Substrate', {})
-    print(f"STEP 2 [XML Migration]: Recovered Substrate BC from XML? {'YES' if legacy_sub.get('boundary_conditions') else 'NO'}")
+    # print(f"STEP 2 [XML Migration]: Recovered Substrate BC from XML? {'YES' if legacy_sub.get('boundary_conditions') else 'NO'}")
 
-    print(f"!!!!!  Legacy fields {legacy_fields}")
+    # print(f"!!!!!  Legacy fields {legacy_fields}")
     for field_name, params in legacy_fields.items():
         registry.add_field_params(field_name, params)
     
@@ -59,9 +59,9 @@ def process_and_inject_rule(project_path, registry, rule):
             registry.field_params[k] = v
 
     final_sub = registry.field_params.get('Substrate', {})
-    print(f"STEP 3 [Pre-Write Registry]: Substrate BC still alive? {'YES' if final_sub.get('boundary_conditions') else 'NO'}")
+    # print(f"STEP 3 [Pre-Write Registry]: Substrate BC still alive? {'YES' if final_sub.get('boundary_conditions') else 'NO'}")
 
-    print(f"!!!!! After moving we got fields: {registry.field_params}")
+    # print(f"!!!!! After moving we got fields: {registry.field_params}")
 
     # Assume your rule includes chemotaxis or secretion logic; update registry.field_params here
     # For example:

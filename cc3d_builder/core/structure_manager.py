@@ -731,7 +731,7 @@ class StructureManager:
         )
 
         for field_name, params in field_params.items():
-            print(f"DEBUG: Params for {field_name}: {params}")
+            # print(f"DEBUG: Params for {field_name}: {params}")
             field_node = ET.SubElement(solver_node, 'DiffusionField', attrib={'Name': field_name})
             data_node = ET.SubElement(field_node, 'DiffusionData')
             

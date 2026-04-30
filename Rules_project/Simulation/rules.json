@@ -1,71 +1,32 @@
 {
   "rules": [
     {
-      "behaviour": "growth",
       "id": "1",
-      "target": "CellA",
-      "when": {
-        "condition_type": "TimeWindow",
-        "params": {
-          "start_mcs": 0,
-          "end_mcs": 1000
+      "target": "Cell",
+      "behaviour": "differentiate",
+      "cases": [
+        {
+          "when": {
+            "condition_type": "Morphology_Elongation",
+            "params": {
+              "operator": ">=",
+              "threshold": 1.5
+            }
+          },
+          "apply": {
+            "mode": "division",
+            "parent_type": "CellB",
+            "child_type": "CellB",
+            "volume_ratio": 0.5,
+            "placement": {
+              "type": "random"
+            }
+          }
         }
-      },
-      "apply": {
-        "model": "linear",
-        "regulator": NaN,
-        "parameters": {
-          "alpha": 0.5
-        }
-      },
+      ],
       "once": true,
-      "debug": false
-    },
-    {
-      "behaviour": "growth",
-      "id": "2",
-      "target": "CellB",
-      "when": {
-        "condition_type": "Environment",
-        "params": {
-          "operator": "<",
-          "threshold": 0.2,
-          "field_name": "Oxygen"
-        }
-      },
-      "apply": {
-        "model": "hill",
-        "regulator": "Oxygen",
-        "parameters": {
-          "y_min": 0.0,
-          "y_max": 2.0,
-          "k": 0.5,
-          "n": 4.0
-        }
-      },
-      "once": false,
-      "debug": true
-    },
-    {
-      "behaviour": "growth",
-      "id": "3",
-      "target": "CellA",
-      "when": {
-        "condition_type": "Morphology_Elongation",
-        "params": {
-          "operator": ">",
-          "threshold": 2.0
-        }
-      },
-      "apply": {
-        "model": "expression",
-        "regulator": "elongation",
-        "parameters": {
-          "expression": "0.01 * Oxygen"
-        }
-      },
-      "once": false,
-      "debug": false
+      "debug": false,
+      "triggered": false
     }
   ],
   "celltype_params": {
@@ -83,7 +44,7 @@
     },
     "CellB": {
       "targetVolume": 49.0,
-      "lambdaVolume": 10.0,
+      "lambdaVolume": 7.0,
       "initial_count": 5,
       "should_initialize": true
     }

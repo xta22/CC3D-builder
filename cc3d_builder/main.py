@@ -79,6 +79,7 @@ def main():
         )
         '''
         # registry.add_rule(rule)
+        print(f"DEBUG: Current rules count: {len(registry.rules)}")
         registry.save() # Rules_project/rules.json
         registry.export_to_xml() # Rules_project/Rules_project.xml
         print("✅ Rule successfully added and injected ✔")
