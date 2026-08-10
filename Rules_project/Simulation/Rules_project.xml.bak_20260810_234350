@@ -1,0 +1,297 @@
+<CompuCell3D Revision="5" Version="4.7.0">
+    <Metadata>
+        <NumberOfProcessors>1</NumberOfProcessors>
+        <DebugOutputFrequency>10</DebugOutputFrequency>
+        <MCSConversionFactor DisplayName="No conversion" Units="-">1.0</MCSConversionFactor>
+        <VoxelConversionFactor DisplayName="No conversion" Units="-">1.0</VoxelConversionFactor>
+    </Metadata>
+    <Potts>
+        <Dimensions x="256" y="256" z="1"></Dimensions>
+        <Steps>100000</Steps>
+        <Temperature>10.0</Temperature>
+        <NeighborOrder>1</NeighborOrder>
+    </Potts>
+    <Plugin Name="CellType">
+        <CellType TypeId="0" TypeName="Medium"></CellType>
+        <CellType TypeId="1" TypeName="HostCell"></CellType>
+        <CellType TypeId="2" TypeName="FungusYeast"></CellType>
+        <CellType TypeName="AttachedFungus" TypeId="3"></CellType>
+        <CellType TypeName="HyphaTip" TypeId="4"></CellType>
+        <CellType TypeName="HyphaSegment" TypeId="5"></CellType>
+        <CellType TypeName="DamagedHostCell" TypeId="6"></CellType>
+        <CellType TypeName="InterstitialSpace" TypeId="7"></CellType>
+        <CellType TypeName="HyphaRoot" TypeId="8"></CellType>
+    </Plugin>
+    <Plugin Name="FocalPointPlasticity">
+        <Local></Local>
+        <InternalParameters Type1="HyphaRoot" Type2="HyphaTip">
+            <Lambda>40</Lambda>
+            <ActivationEnergy>0</ActivationEnergy>
+            <TargetDistance>1</TargetDistance>
+            <MaxDistance>3</MaxDistance>
+            <MaxNumberOfJunctions>1</MaxNumberOfJunctions>
+        </InternalParameters>
+        <InternalParameters Type1="HyphaSegment" Type2="HyphaTip">
+            <Lambda>40</Lambda>
+            <ActivationEnergy>0</ActivationEnergy>
+            <TargetDistance>1</TargetDistance>
+            <MaxDistance>3</MaxDistance>
+            <MaxNumberOfJunctions>2</MaxNumberOfJunctions>
+        </InternalParameters>
+        <InternalParameters Type1="HyphaSegment" Type2="HyphaSegment">
+            <Lambda>40</Lambda>
+            <ActivationEnergy>0</ActivationEnergy>
+            <TargetDistance>1</TargetDistance>
+            <MaxDistance>3</MaxDistance>
+            <MaxNumberOfJunctions>2</MaxNumberOfJunctions>
+        </InternalParameters>
+        <InternalParameters Type1="HyphaRoot" Type2="HyphaSegment">
+            <Lambda>40</Lambda>
+            <ActivationEnergy>0</ActivationEnergy>
+            <TargetDistance>1</TargetDistance>
+            <MaxDistance>3</MaxDistance>
+            <MaxNumberOfJunctions>1</MaxNumberOfJunctions>
+        </InternalParameters>
+        <NeighborOrder>1</NeighborOrder>
+    </Plugin>
+    <Plugin Name="PixelTracker"></Plugin>
+    <Plugin Name="ConnectivityGlobal">
+        <FastAlgorithm></FastAlgorithm>
+        <ConnectivityOn Type="FungusYeast"></ConnectivityOn>
+        <ConnectivityOn Type="AttachedFungus"></ConnectivityOn>
+        <ConnectivityOn Type="HyphaRoot"></ConnectivityOn>
+        <ConnectivityOn Type="HyphaSegment"></ConnectivityOn>
+        <ConnectivityOn Type="HyphaTip"></ConnectivityOn>
+    </Plugin>
+    <Plugin Name="Volume">
+        </Plugin>
+    <Plugin Name="ExternalPotential">
+        <Algorithm>PixelBased</Algorithm>
+        <ExternalPotentialParameters CellType="HostCell" x="-0.5" y="0.0" z="0.0"></ExternalPotentialParameters>
+        <ExternalPotentialParameters CellType="FungusYeast" x="-0.5" y="0.0" z="0.0"></ExternalPotentialParameters>
+    </Plugin>
+    <Plugin Name="CenterOfMass">
+      
+      
+   </Plugin>
+    <Plugin Name="NeighborTracker">
+      
+      
+   </Plugin>
+    <Plugin Name="Contact">
+        <Energy Type1="Medium" Type2="Medium">10.0</Energy>
+        <Energy Type1="Medium" Type2="HostCell">10.0</Energy>
+        <Energy Type1="Medium" Type2="FungusYeast">12</Energy>
+        <Energy Type1="HostCell" Type2="HostCell">10.0</Energy>
+        <Energy Type1="HostCell" Type2="FungusYeast">4</Energy>
+        <Energy Type1="FungusYeast" Type2="FungusYeast">28</Energy>
+        <NeighborOrder>4</NeighborOrder>
+        <Energy Type1="AttachedFungus" Type2="Medium">10.0</Energy>
+        <Energy Type1="AttachedFungus" Type2="HostCell">6</Energy>
+        <Energy Type1="AttachedFungus" Type2="FungusYeast">22</Energy>
+        <Energy Type1="AttachedFungus" Type2="AttachedFungus">18</Energy>
+        <Energy Type1="HyphaTip" Type2="Medium">10.0</Energy>
+        <Energy Type1="HostCell" Type2="HyphaTip">5</Energy>
+        <Energy Type1="FungusYeast" Type2="HyphaTip">10.0</Energy>
+        <Energy Type1="AttachedFungus" Type2="HyphaTip">10.0</Energy>
+        <Energy Type1="HyphaTip" Type2="HyphaTip">10.0</Energy>
+        <Energy Type1="HyphaSegment" Type2="Medium">10.0</Energy>
+        <Energy Type1="HostCell" Type2="HyphaSegment">6</Energy>
+        <Energy Type1="FungusYeast" Type2="HyphaSegment">10.0</Energy>
+        <Energy Type1="AttachedFungus" Type2="HyphaSegment">10.0</Energy>
+        <Energy Type1="HyphaSegment" Type2="HyphaTip">10.0</Energy>
+        <Energy Type1="HyphaSegment" Type2="HyphaSegment">10.0</Energy>
+        <Energy Type1="DamagedHostCell" Type2="Medium">10</Energy>
+        <Energy Type1="DamagedHostCell" Type2="HostCell">10</Energy>
+        <Energy Type1="DamagedHostCell" Type2="FungusYeast">4</Energy>
+        <Energy Type1="AttachedFungus" Type2="DamagedHostCell">6</Energy>
+        <Energy Type1="DamagedHostCell" Type2="HyphaTip">4</Energy>
+        <Energy Type1="DamagedHostCell" Type2="HyphaSegment">5</Energy>
+        <Energy Type1="DamagedHostCell" Type2="DamagedHostCell">10</Energy>
+        <Energy Type1="InterstitialSpace" Type2="Medium">12</Energy>
+        <Energy Type1="HostCell" Type2="InterstitialSpace">7</Energy>
+        <Energy Type1="FungusYeast" Type2="InterstitialSpace">5</Energy>
+        <Energy Type1="AttachedFungus" Type2="InterstitialSpace">5</Energy>
+        <Energy Type1="HyphaTip" Type2="InterstitialSpace">2</Energy>
+        <Energy Type1="HyphaSegment" Type2="InterstitialSpace">2.5</Energy>
+        <Energy Type1="DamagedHostCell" Type2="InterstitialSpace">7</Energy>
+        <Energy Type1="InterstitialSpace" Type2="InterstitialSpace">4</Energy>
+        <Energy Type1="HyphaRoot" Type2="Medium">10</Energy>
+        <Energy Type1="HostCell" Type2="HyphaRoot">6</Energy>
+        <Energy Type1="FungusYeast" Type2="HyphaRoot">10</Energy>
+        <Energy Type1="AttachedFungus" Type2="HyphaRoot">6</Energy>
+        <Energy Type1="HyphaRoot" Type2="HyphaTip">8</Energy>
+        <Energy Type1="HyphaRoot" Type2="HyphaSegment">8</Energy>
+        <Energy Type1="DamagedHostCell" Type2="HyphaRoot">6</Energy>
+        <Energy Type1="HyphaRoot" Type2="InterstitialSpace">5</Energy>
+        <Energy Type1="HyphaRoot" Type2="HyphaRoot">10</Energy>
+    </Plugin>
+    <Plugin Name="ContactInternal">
+        <Energy Type1="Medium" Type2="Medium">10.0</Energy>
+        <Energy Type1="Medium" Type2="HostCell">10.0</Energy>
+        <Energy Type1="Medium" Type2="FungusYeast">10.0</Energy>
+        <Energy Type1="HostCell" Type2="HostCell">10.0</Energy>
+        <Energy Type1="HostCell" Type2="FungusYeast">10.0</Energy>
+        <Energy Type1="FungusYeast" Type2="FungusYeast">10.0</Energy>
+        <NeighborOrder>4</NeighborOrder>
+        <Energy Type1="HyphaRoot" Type2="HyphaTip">2</Energy>
+        <Energy Type1="HyphaSegment" Type2="HyphaTip">2</Energy>
+        <Energy Type1="HyphaSegment" Type2="HyphaSegment">2</Energy>
+        <Energy Type1="HyphaRoot" Type2="HyphaSegment">2</Energy>
+    </Plugin>
+    <Steppable Type="UniformInitializer">
+        <Region>
+            <BoxMin x="18" y="34" z="0"></BoxMin>
+            <BoxMax x="126" y="222" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>12</Width>
+            <Types>HostCell</Types>
+        </Region>
+        <Region>
+            <BoxMin x="142" y="132" z="0"></BoxMin>
+            <BoxMax x="148" y="138" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>8</Width>
+            <Types>FungusYeast</Types>
+        </Region>
+        <Region>
+            <BoxMin x="48" y="72" z="0"></BoxMin>
+            <BoxMax x="55" y="80" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>6</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="68" y="118" z="0"></BoxMin>
+            <BoxMax x="75" y="126" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>6</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="92" y="154" z="0"></BoxMin>
+            <BoxMax x="100" y="163" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>7</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="108" y="92" z="0"></BoxMin>
+            <BoxMax x="116" y="101" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>7</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="42" y="184" z="0"></BoxMin>
+            <BoxMax x="50" y="193" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>7</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="82" y="202" z="0"></BoxMin>
+            <BoxMax x="90" y="211" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>7</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="58" y="146" z="0"></BoxMin>
+            <BoxMax x="65" y="154" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>6</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+        <Region>
+            <BoxMin x="104" y="178" z="0"></BoxMin>
+            <BoxMax x="113" y="187" z="1"></BoxMax>
+            <Gap>0</Gap>
+            <Width>7</Width>
+            <Types>InterstitialSpace</Types>
+        </Region>
+    </Steppable>
+    <Steppable Type="DiffusionSolverFE">
+        <DiffusionField Name="DamageFactor">
+            <DiffusionData>
+                <FieldName>DamageFactor</FieldName>
+                <GlobalDiffusionConstant>0.03</GlobalDiffusionConstant>
+                <GlobalDecayConstant>0.001</GlobalDecayConstant>
+                <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+                <Plane Axis="Y">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+        <DiffusionField Name="FungalSignal">
+            <DiffusionData>
+                <FieldName>FungalSignal</FieldName>
+                <GlobalDiffusionConstant>0.02</GlobalDiffusionConstant>
+                <GlobalDecayConstant>0.001</GlobalDecayConstant>
+                <InitialConcentrationExpression>0.0</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+                <Plane Axis="Y">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+        <DiffusionField Name="Nutrient">
+            <DiffusionData>
+                <FieldName>Nutrient</FieldName>
+                <GlobalDiffusionConstant>0.01</GlobalDiffusionConstant>
+                <GlobalDecayConstant>0.0001</GlobalDecayConstant>
+                <InitialConcentrationExpression>  0.05 + 0.95/(1 + exp((x-128)/6))
+
+</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+                <Plane Axis="Y">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+        <DiffusionField Name="HostAssociatedCue">
+            <DiffusionData>
+                <FieldName>HostAssociatedCue</FieldName>
+                <GlobalDiffusionConstant>0.08</GlobalDiffusionConstant>
+                <GlobalDecayConstant>8e-05</GlobalDecayConstant>
+                <InitialConcentrationExpression>0.08 + 0.42*(1 - x/255.0)</InitialConcentrationExpression>
+            </DiffusionData>
+            <BoundaryConditions>
+                <Plane Axis="X">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+                <Plane Axis="Y">
+                    <ConstantDerivative PlanePosition="Min" Value="0.0"></ConstantDerivative>
+                    <ConstantDerivative PlanePosition="Max" Value="0.0"></ConstantDerivative>
+                </Plane>
+            </BoundaryConditions>
+        </DiffusionField>
+    </Steppable>
+    <Plugin Name="Chemotaxis">
+        <ChemicalField Name="HostAssociatedCue" Source="DiffusionSolverFE">
+            <ChemotaxisByType Type="FungusYeast" Lambda="0.0"></ChemotaxisByType>
+            <ChemotaxisByType Type="AttachedFungus" Lambda="0.0"></ChemotaxisByType>
+        </ChemicalField>
+    </Plugin>
+    <Plugin Name="Secretion"></Plugin>
+</CompuCell3D>

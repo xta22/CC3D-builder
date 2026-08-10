@@ -1,0 +1,1 @@
+# global_cond.py

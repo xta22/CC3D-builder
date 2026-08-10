@@ -1,0 +1,194 @@
+# CC3D Rule-Based Simulation Framework
+
+A modular rule-engine framework for CompuCell3D (CC3D) that enables **declarative rule specification via JSON**, dynamic interpretation through an engine, and execution via plugin-based steppables.
+
+---
+
+## Overview
+
+This project introduces a **rule-driven simulation architecture** where biological behaviors are defined using structured JSON rules rather than hardcoded logic.
+
+The system separates:
+
+- **What to do** → defined in JSON rules  
+- **How to do it** → implemented in engine + plugins  
+- **When it happens** → evaluated per cell at each simulation step (MCS)
+
+---
+
+## Core Idea
+
+> JSON does not execute directly; it is deserialized into structured rule objects, which are interpreted by the engine and executed at each simulation step (MCS).
+
+During execution:
+
+1. Rules are evaluated per cell  
+2. Conditions are checked  
+3. Behaviors are resolved via a registry  
+4. Actions are queued  
+5. Steppables execute the actions in CC3D  
+
+---
+
+## Architecture
+
+```text
+Build Phase:
+User / API
+   ↓
+RuleBuilder / ModelBuilder / ConditionBuilder
+   ↓
+Rule Objects
+   ↓
+Serializer
+   ↓
+JSON
+
+Runtime Phase:
+JSON
+   ↓
+Deserialization
+   ↓
+Rule Engine
+   ↓
+Condition Evaluation
+   ↓
+Behavior Registry → Plugins
+   ↓
+Action Queue
+   ↓
+Steppables
+   ↓
+CC3D Simulation
+
+
+## Installation & Setup
+
+### 1. Prerequisites
+
+Before using **cc3d-builder**, make sure you have a basic but structurally complete CC3D project, including:
+
+- `.cc3d` project file  
+- `Simulation/` directory  
+- XML configuration file  
+- Python steppables  
+
+Example structure:
+ProjectA/
+├── ProjectA.cc3d
+└── Simulation/
+    ├── ProjectA.xml
+    ├── ProjectA_Steppables.py
+    └── ProjectAmain.py
+
+---
+
+### 2. Download the Package
+
+Clone or download the repository:
+
+```bash
+git clone https://github.com/xta22/CC3D-builder.git
+cd CC3D-builder
+
+Or download manually from:
+
+https://github.com/xta22/CC3D-builder
+
+
+---
+### 3. Set Up Virtual Environment
+
+A virtual environment is recommended (required for GUI support):
+
+python3 -m venv <your_virtual_environment>
+source <your_virtual_environment>/bin/activate
+
+
+---
+### 4. Install Dependencies
+
+Install required Python packages:
+
+pip install -r requirements.txt
+
+
+
+---
+### 5. Verify Installation
+
+Run a simple script or launch the GUI:
+
+python -m cc3d_builder.main
+
+
+## 💡 Tips
+
+- The **target cell** is, by default, the object on which the behaviour is executed when the condition evaluates to true.
+
+- If you need to express interactions such as:
+  
+  > *When cell A satisfies a condition, it causes cell B to differentiate*  
+
+  you will need to define a **custom condition** to explicitly specify the relationship between cells.
+
+- During rule creation, if the condition type does **not involve cell-specific behavior** (e.g., a time window), the `target` can be set to `None`.
+
+- Similarly, if the condition type is **environment-based**, the system will automatically retrieve the relevant target cells based on the simulation context.
+
+- Newly created **cell types** are automatically registered into the system when rules are created.  
+  However, they are **not automatically removed** when the rule that originally introduced them is deleted.
+
+- This design is intentional: once a new cell type is introduced, there may be **multiple subsequent rules** depending on it.  
+  Automatically removing the cell type could break those dependencies and potentially cause the simulation to crash.
+
+- The same principle applies to **fields**.
+
+If you are certain that a cell type or field is no longer needed, you can:
+
+- Set all its associated parameters to zero, or  
+- Manually remove all related definitions from:
+  - the XML configuration file  
+  - the steppable initialization (e.g., `start()` function)
+
+- When using **CSV import** via the CLI, rules can be successfully processed by the engine.  
+  However, the system does **not yet guarantee correct compiled code generation** (e.g., steppables or XML).
+
+- If a rule involves any form of **customization**—such as:
+  - custom conditions, or  
+  - fully custom rule scripts  
+
+  it is **not recommended** to use CSV import.  
+  Instead, use the **GUI editor for manual input** to ensure correctness and compatibility.
+
+- When importing rules from CSV, behaviors of the **same type must be grouped within the same template**.  
+  Mixing different behavior types across templates may lead to incorrect parsing or execution.
+
+- If you require **strict control over rule execution order**, note that CSV import does **not guarantee ordering**.  
+  In such cases, the execution order should be **manually adjusted after import**.
+
+
+- The **rule ID** is used only as a label for each rule and does **not determine execution order**.
+
+- The actual execution order is determined by the **rule arrangement in the Manage Rules window**, and the rule engine will **strictly follow this order** during execution.
+
+- Generated traditional CC3D steppables preserve this ordering by executing
+  `COMPILED_RULES` strictly from top to bottom. Legacy `order` fields are
+  embedded for readability/backward compatibility, but they do not reorder
+  generated code.
+
+- Generated steppables support `Custom` conditions and `custom_script` rules
+  through external Python scripts. Relative script paths are resolved against
+  the generated steppable file directory first.
+
+- The generated file is a complete traditional CC3D steppable. It can be copied
+  over the project's `*Steppables.py` when the generated class name matches the
+  class imported and registered by the project `main.py`. User edits should be
+  placed inside the `USER CUSTOM HOOKS` block because that block is preserved
+  when the generator rewrites the file.
+- Users could manually modify json files, the change they make would be synchronized to XML and *Steppable.py. The reverse, however, does not work. Users' manual edition on XML and *Steppable.py would be covered by registry.
+
+- Users should click **Save** at any time to ensure system synchronization. Although we have implemented automatic refresh and save for each button, this is just a precaution.
+- When importing rules using a CSV template, since we have unfolded the rule schema dictionaries, you can simply leave any fields blank if they do not apply to your rule.
+
+- when applying customized script plugin, within each rule, the rule-specific parameter keys used by the user must be unique, and attention must also be paid to proper type conversion.

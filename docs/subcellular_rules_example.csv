@@ -1,0 +1,5 @@
+id,behaviour,target,frequency,when_type,regulator_type,regulator,operator,value,system,action,component,amount,count,stage,from_stage,to_stage,requires
+1,subcellular,Nucleus,1,TRUE,,,,,npc,increase_component,y_complex,2,,,,,
+2,subcellular,Nucleus,1,TRUE,,,,,npc,increase_component,connecting_complex,2,,,,,
+3,subcellular,Nucleus,5,subcellular_state,,stage,==,none,npc,set_stage,,,,seed,,,
+4,subcellular,Nucleus,10,subcellular_state,,stage,==,inner_ring,npc,assemble,,1,,,,mature,

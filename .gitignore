@@ -1,0 +1,22 @@
+# Ignore Python virtual environments
+venv/
+.venv/
+env/
+*/venv/
+*/.venv/
+*/env/
+
+# Ignore specific venv under cc3d_builder
+cc3d_builder/gui_cc3d/
+
+# Python cache
+__pycache__/
+*.pyc
+
+.vscode/
+.idea/
+
+__pycache__/
+*.py[cod]
+*$py.classRules_project_cc3d_*/
+Rules_project_cc3d_0*/

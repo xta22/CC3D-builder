@@ -1,0 +1,3 @@
+id,engine,model_name,source_kind,boolean_network_path,simulation_configuration_path,source_path,attach_cell_types,step_size,initial_conditions,inputs,outputs
+DeltaNotch,maboss,DeltaNotch,file,models/delta_notch.bnd,models/delta_notch.cfg,,"Tip",1.0,"{""NICD"": false}","[{""model_var"": ""Delta_ext"", ""from"": ""neighbor_average"", ""source_model"": ""DeltaNotch"", ""source_var"": ""Delta"", ""target_type"": ""Tip"", ""default"": 0.0}]","[{""model_var"": ""NICD"", ""to"": ""state"", ""key"": ""notch_active""}]"
+NotchSBML,sbml,NotchSBML,file,,,models/notch.xml,"Tip, Segment",1.0,"{}","[]","[{""model_var"": ""NICD"", ""to"": ""state"", ""key"": ""notch_active""}]"

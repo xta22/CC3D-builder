@@ -1,0 +1,26 @@
+# original_main.py
+
+from cc3d import CompuCellSetup
+        
+
+
+from Rules_project_Steppables import ConstraintInitializerSteppable
+
+CompuCellSetup.register_steppable(steppable=ConstraintInitializerSteppable(frequency=1))
+
+
+'''
+
+from Rules_projectSteppables import GrowthSteppable
+
+CompuCellSetup.register_steppable(steppable=GrowthSteppable(frequency=1))
+
+
+
+
+from Rules_projectSteppables import MitosisSteppable
+
+CompuCellSetup.register_steppable(steppable=MitosisSteppable(frequency=1))
+
+'''
+

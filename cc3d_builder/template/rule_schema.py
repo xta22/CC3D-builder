@@ -1,0 +1,1 @@
+# rule_schema.py
