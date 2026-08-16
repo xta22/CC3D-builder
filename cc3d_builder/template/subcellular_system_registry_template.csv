@@ -1,0 +1,2 @@
+id,scope,stages,default_stage,attach_cell_types,default_counts,default_localization
+npc,cell,"none,seed,y_complex_scaffold,connecting_complex,channel_complex,inner_ring,mature",none,Nucleus,"{""assembly_sites"":0,""y_complex"":0,""connecting_complex"":0,""channel_complex"":0,""nup205_inner_ring"":0,""nup188_inner_ring"":0,""assembled_pore"":0}","{""cytoplasm"":1.0,""nuclear_envelope"":0.0}"

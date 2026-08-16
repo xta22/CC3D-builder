@@ -14,40 +14,7 @@ class DifferentiateSteppable(MitosisSteppableBase):
 
     def step(self, mcs):
         self.current_mcs = mcs
-        if self.cell_list is None:
-            return
-
-        if self.engine is None:
-            return
-        if self.engine.ordered_dispatch_enabled():
-            return
-
-        cells_to_divide = []
-
-        for cell in self.cell_list:
-
-            # =========================
-            # 1️⃣ TYPE SWITCH
-            # =========================
-            ts = cell.dict.get("requests", {}).get("type_switch")
-
-            if ts:
-                self._execute_type_switch(cell, ts, mcs)
-                cell.dict["requests"]["type_switch"] = None
-
-            # =========================
-            # 2️⃣ DIVISION REQUEST
-            # =========================
-            request = cell.dict.get("requests", {}).get("division")
-
-            if request:
-                cells_to_divide.append((cell, request))
-
-        # ============================================================
-        # ============================================================
-        for cell, request in cells_to_divide:
-            self._execute_division(cell, request, mcs)
-            cell.dict["requests"]["division"] = None
+        return
 
     def execute(self, cell, request, mcs):
         self.current_mcs = mcs

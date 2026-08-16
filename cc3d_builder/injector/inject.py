@@ -52,11 +52,7 @@ def process_and_inject_rule(project_path, registry, rule):
 
     # print(f"!!!!!  Legacy fields {legacy_fields}")
     for field_name, params in legacy_fields.items():
-        registry.add_field_params(field_name, params)
-    
-    for k, v in legacy_fields.items():
-        if k not in registry.field_params:
-            registry.field_params[k] = v
+        registry.field_params.setdefault(field_name, params)
 
     final_sub = registry.field_params.get('Substrate', {})
     # print(f"STEP 3 [Pre-Write Registry]: Substrate BC still alive? {'YES' if final_sub.get('boundary_conditions') else 'NO'}")

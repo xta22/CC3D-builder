@@ -1,0 +1,5 @@
+id,order,behaviour,target,mode,force,persist,decay,dx,dy,dz,target_x,target_y,target_z,target_cell_id,target_type,field_name,gradient_step,vector_prefix,mode_param,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+FORCE_VECTOR,1,force,Cell,vector,10,FALSE,1,1,0,0,,,,,,,,,,TRUE,,,,,,,,,,,1,FALSE,FALSE
+FORCE_DYNAMIC,2,force,Cell,toward_field_gradient,"{""model"":""linear"",""regulator"":""Nutrient"",""parameters"":{""alpha"":8.0}}",TRUE,"{""model"":""linear"",""regulator"":""DamageFactor"",""parameters"":{""alpha"":0.2}}",,,,,,,,,ATTR,1,,,time_window,,0,1000,,,,,,,,1,FALSE,FALSE
+FORCE_NEAREST_TYPE,3,force,Cell,toward_nearest_type,12,FALSE,1,,,,,,,,AttractorCell,,,,,threshold,,,,Environment,Oxygen,>,0.2,,,,1,FALSE,TRUE
+FORCE_CLEAR,4,force,Cell,clear,,,,,,,,,,,,,,,,TRUE,,,,,,,,,,,1,FALSE,FALSE

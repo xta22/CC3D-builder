@@ -9,11 +9,11 @@ from cc3d_builder.engine.core.behaviour_stats import (
 
 class PhagocytosisSteppable(SteppableBasePy):
     """
-    Execute queued phagocytosis requests.
+    Execute phagocytosis requests.
 
-    RuleEngine handles rule matching and PhagocytosisPlugin queues requests.
-    This steppable owns the CC3D side effects: neighbor scan, volume transfer,
-    optional field leakage, and queue cleanup.
+    RuleEngine handles rule matching and calls execute directly. This
+    steppable owns the CC3D side effects: neighbor scan, volume transfer,
+    and optional field leakage.
     """
 
     def __init__(self, frequency=1, engine=None):
@@ -23,26 +23,7 @@ class PhagocytosisSteppable(SteppableBasePy):
             self.engine.register_executor("phagocytosis", self)
 
     def step(self, mcs):
-        if self.cell_list is None:
-            return
-        if self.engine is not None and self.engine.ordered_dispatch_enabled():
-            return
-
-        for cell in self.cell_list:
-            request_dict = cell.dict.setdefault("requests", {})
-            requests = request_dict.get("phagocytosis", [])
-
-            if not requests:
-                continue
-
-            try:
-                if cell.dict.get("is_dead"):
-                    continue
-
-                for request in list(requests):
-                    self._execute_request(cell, request, mcs)
-            finally:
-                request_dict["phagocytosis"] = []
+        return
 
     def execute(self, cell, request, mcs):
         self._execute_request(cell, request, mcs)

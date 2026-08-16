@@ -1,0 +1,4 @@
+id,order,behaviour,target,cell_type,count,dist_type,center_x,center_y,radius,direction,x,y,x_start,x_end,y_start,y_end,x_gap,y_gap,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+CREATE_RANDOM,1,create,None,CellA,10,random,,,,,,,,,,,,,time_window,,0,100,,,,,,,,1,TRUE,FALSE
+CREATE_CLUSTER,2,create,None,CellB,20,cluster,50,50,15,,,,,,,,,,TRUE,,,,,,,,,,,1,TRUE,FALSE
+CREATE_DYNAMIC_COUNT,3,create,None,CellA,"{""model"":""linear"",""regulator"":""Nutrient"",""parameters"":{""alpha"":8}}",stripe,,,,vertical,20,,0,,0,80,,10,TRUE,,,,,,,,,,,1,TRUE,FALSE

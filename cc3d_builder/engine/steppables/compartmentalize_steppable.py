@@ -33,25 +33,7 @@ class CompartmentalizeSteppable(SteppableBasePy):
         print("[CompartmentalizeSteppable] loaded and registered")
 
     def step(self, mcs):
-        if self.cell_list is None:
-            return
-        if self.engine is not None and self.engine.ordered_dispatch_enabled():
-            return
-
-        for cell in list(self.cell_list):
-            requests = cell.dict.setdefault("requests", {})
-            queue = requests.get("compartmentalize", [])
-            if not queue:
-                continue
-
-            try:
-                if cell.dict.get("is_dead"):
-                    continue
-
-                for request in list(queue):
-                    self._execute_request(cell, request, mcs)
-            finally:
-                requests["compartmentalize"] = []
+        return
 
     def execute(self, cell, request, mcs):
         self._execute_request(cell, request, mcs)

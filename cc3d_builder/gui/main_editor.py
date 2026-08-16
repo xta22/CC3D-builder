@@ -15,7 +15,6 @@ from cc3d_builder.core.state_key_catalog import format_state_key_catalog
 from cc3d_builder.core.csv_importer import import_rules_from_csv
 from cc3d_builder.utils_extensions.utils import  handle_new_rule_registration, ask_params_gui, process_custom_script, extract_params
 from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
-from cc3d_builder.injector.inject import process_and_inject_rule
 from cc3d_builder.utils_extensions.paths import ROOT, SANDBOX_DIR
 from typing import Any
 from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
@@ -118,30 +117,54 @@ class MainWindow(QWidget):
             return
 
         self.registry.settings["execution_semantics"] = value
-        self.registry.save()
+        self.registry.commit_artifacts(quiet=True)
         QMessageBox.information(self, "Execution Semantics", f"Execution semantics set to: {value}")
 
     def _ask_parameter_gui(self, title, label, default_val=1.0):
         """
-        Allow users to freely choose between directly entering a plain number/formula, or invoking the advanced multi-factor physical model builder.**
+        Allow users to choose a fixed numeric value, a state/native expression,
+        or a field-regulated physical model.
         """
-        items = ["1 - Constant / Custom Expression (Number or plain-text expression.)", "2 - Dynamic Physical Model (Hill / Linear / Expression)"]
-        choice, ok = QInputDialog.getItem(self, title, f"{label}\nPlease select input type:", items, 0, False)
+        items = [
+            "1 - Fixed Constant (number only)",
+            "2 - State / Native Expression ({state_key}, e.g., {volume} * 0.01)",
+            "3 - Field Physical Model (diffusion fields only)",
+        ]
+        choice, ok = QInputDialog.getItem(
+            self,
+            title,
+            f"{label}\nFixed = number only.\nState/native = {{state_key}} expressions.\nPhysical model = diffusion-field regulators only.",
+            items,
+            0,
+            False,
+        )
         if not ok:
             return default_val
 
-        if choice.startswith("2"):
+        if choice.startswith("3"):
             from cc3d_builder.gui.build_model_gui import build_model_gui
             model = build_model_gui("dynamic_parameter", self)
             return model if model is not None else default_val
-        else:
-            val, ok = QInputDialog.getText(self, title, f"{label}\nPlease enter a constant or text expression:", text=str(default_val))
+        elif choice.startswith("2"):
+            val, ok = QInputDialog.getText(
+                self,
+                title,
+                f"{label}\nEnter a state/native expression using {{state_key}} names.\nExamples: {{volume}} * 0.01, {{division_count}} + 1",
+                text="{volume} * 0.01",
+            )
             if not ok or not val.strip():
                 return default_val
-            try:
-                return float(val.strip())
-            except ValueError:
-                return val.strip()
+            return val.strip()
+        else:
+            while True:
+                val, ok = QInputDialog.getText(self, title, f"{label}\nPlease enter a numeric constant:", text=str(default_val))
+                if not ok or not val.strip():
+                    return default_val
+                try:
+                    return float(val.strip())
+                except ValueError:
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(self, "Invalid Constant", "Fixed Constant accepts numbers only. Use State / Native Expression for {state_key} formulas.")
 
     # ============================================================
     # RULE LIST
@@ -546,10 +569,11 @@ class MainWindow(QWidget):
             QMessageBox.critical(self, "Error", f"Registration failed:\n{str(e)}")
             return
 
+        self.registry.commit_artifacts(quiet=True)
         self.refresh_list()
         QMessageBox.information(
             self, "Success",
-            f"Rule added and injected successfully!"
+            f"Rule added and synced successfully!"
         )
 
     # ============================================================
@@ -561,12 +585,7 @@ class MainWindow(QWidget):
             print("No registry loaded")
             return
 
-        self.registry.save()
-
-        try:
-            self.registry.export_to_xml()
-        except Exception as e:
-            print("❌ Export failed:", e)
+        self.registry.commit_artifacts(quiet=True)
 
         print("Saved")
 

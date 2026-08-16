@@ -8,7 +8,7 @@ class CompartmentalizePlugin:
     def __init__(self, engine: Any):
         self.engine = engine
 
-    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> None:
+    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> dict[str, Any] | None:
         if cell is None:
             return
 
@@ -17,13 +17,7 @@ class CompartmentalizePlugin:
         request.setdefault("action", "extend_chain")
         request["debug"] = bool(rule.get("debug") or request.get("debug", False))
 
-        requests = cell.dict.setdefault("requests", {})
-        queue = requests.get("compartmentalize")
-        if not isinstance(queue, list):
-            queue = []
-            requests["compartmentalize"] = queue
-
-        queue.append(request)
-
         if request.get("debug_queue"):
-            print(f"[CompartmentalizePlugin] queued compartmentalize request for cell {cell.id}: {request.get('action')}")
+            print(f"[CompartmentalizePlugin] built compartmentalize request for cell {cell.id}: {request.get('action')}")
+
+        return request

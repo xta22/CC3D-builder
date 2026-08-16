@@ -106,23 +106,46 @@ class ManageRulesWindow(QWidget):
         Advanced parameter/model dispatcher specifically for the window manager.
         Prevents integer casting crashes when cloning rules that contain advanced physical models.
         """
-        items = ["1 - Constant / Custom Expression (numeric value or formula string)", "2 - Dynamic Physical Model (Hill / Linear model)"]
-        choice, ok = QInputDialog.getItem(self, title, f"{label}\nPlease select input type:", items, 0, False)
+        items = [
+            "1 - Fixed Constant (number only)",
+            "2 - State / Native Expression ({state_key}, e.g., {volume} * 0.01)",
+            "3 - Field Physical Model (diffusion fields only)",
+        ]
+        choice, ok = QInputDialog.getItem(
+            self,
+            title,
+            f"{label}\nFixed = number only.\nState/native = {{state_key}} expressions.\nPhysical model = diffusion-field regulators only.",
+            items,
+            0,
+            False,
+        )
         if not ok:
             return default_val
 
-        if choice.startswith("2"):
+        if choice.startswith("3"):
             model = build_model_gui("dynamic_parameter", self)
             return model if model is not None else default_val
-        else:
-            d_str = "1" if isinstance(default_val, dict) else str(default_val)
-            val, ok = QInputDialog.getText(self, title, f"{label}\nPlease enter a constant or text expression:", text=d_str)
+        elif choice.startswith("2"):
+            val, ok = QInputDialog.getText(
+                self,
+                title,
+                f"{label}\nEnter a state/native expression using {{state_key}} names.\nExamples: {{volume}} * 0.01, {{division_count}} + 1",
+                text="{volume} * 0.01",
+            )
             if not ok or not val.strip():
                 return default_val
-            try:
-                return float(val.strip()) if '.' in val.strip() else int(val.strip())
-            except ValueError:
-                return val.strip()
+            return val.strip()
+        else:
+            d_str = "1" if isinstance(default_val, dict) else str(default_val)
+            while True:
+                val, ok = QInputDialog.getText(self, title, f"{label}\nPlease enter a numeric constant:", text=d_str)
+                if not ok or not val.strip():
+                    return default_val
+                try:
+                    return float(val.strip()) if '.' in val.strip() else int(val.strip())
+                except ValueError:
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(self, "Invalid Constant", "Fixed Constant accepts numbers only. Use State / Native Expression for {state_key} formulas.")
 
     def _case_payload(self, rule):
         cases = rule.get("cases") or []
@@ -371,7 +394,7 @@ class ManageRulesWindow(QWidget):
 
         if reply == QMessageBox.Yes:
             self.registry.rules = [r for r in self.registry.rules if str(r['id']) != rule_id]
-            self.registry.save()
+            self.registry.save_state(quiet=True)
             self.refresh_table()
             self.save_and_sync()
             print(f" Rule {rule_id} has been deleted and JSON sync completed.")
@@ -399,7 +422,7 @@ class ManageRulesWindow(QWidget):
         insert_at = curr_row + 1
         self.registry.rules.insert(insert_at, new_rule)
         self.registry._build_index()
-        self.registry.save()
+        self.registry.save_state(quiet=True)
         self.save_and_sync()
         self.refresh_table()
         self.table.selectRow(insert_at)
@@ -429,7 +452,7 @@ class ManageRulesWindow(QWidget):
         if 0 <= target_row < len(self.registry.rules):
             self.registry.rules[curr_row], self.registry.rules[target_row] = \
                 self.registry.rules[target_row], self.registry.rules[curr_row]
-            self.registry.save()
+            self.registry.save_state(quiet=True)
             self.refresh_table()
             self.table.selectRow(target_row)
             self.save_and_sync()
@@ -568,7 +591,7 @@ class ManageRulesWindow(QWidget):
                         self.sm.ensure_field(f_name)
                         self.sm.sync_secretion_plugin_capsule(self.registry.field_params)
 
-            self.registry.save()
+            self.registry.save_state(quiet=True)
             self.save_and_sync()
             self.refresh_table()
 
@@ -738,38 +761,9 @@ class ManageRulesWindow(QWidget):
         Synchronizes the UI Registry data with the physical simulation files (XML and Python).
         This acts as the bridge between the GUI memory and the CC3D source code.
         """
-        # 1. Persist the current Registry state to the rules.json file
-        self.registry.save()
-
         try:
-            if hasattr(self, 'structure_manager'):
-                print("🚀 Using StructureManager for precise file synchronization...")
-
-                # 2. Synchronize Environment Fields (XML)
-                # This updates diffusion constants, decay, etc., in the .xml file
-                self.structure_manager.ensure_field_xml_from_registry(self.registry.field_params)
-
-                # 3. Synchronize Cell Parameters (Python Steppable)
-                # We iterate through all cell types defined in the registry.
-                # For each type, we force-rewrite the 'start()' block in the Steppables.py file.
-                for cell_name, params in self.registry.celltype_params.items():
-                    target_vol = params.get("targetVolume", 50.0)
-                    lambda_vol = params.get("lambdaVolume", 2.0)
-
-                    # This triggers the code injector to find the specific marker
-                    # and update the hard-coded values with the latest Registry values.
-                    self.injector.ensure_volume_start_code(
-                        celltype_name=cell_name,
-                        target_volume=target_vol,
-                        lambda_volume=lambda_vol
-                    )
-                # 4. Commit all changes to the disk
-                self.structure_manager.save()
-                print("✅ [Sync Success] XML and Python source code updated from Registry.")
-
-            else:
-                # Fallback to basic XML export if StructureManager is unavailable
-                self.registry.export_to_xml()
+            self.registry.commit_artifacts(quiet=True)
+            print("✅ [Sync Success] Registry, XML, Python source, and generated code updated.")
 
         except Exception as e:
             # Log any errors during the file writing process

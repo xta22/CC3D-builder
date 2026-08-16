@@ -9,14 +9,8 @@ class GrowthPlugin(BaseBehaviourPlugin):
 
         payload = case_payload(case)
         if not payload:
-            return
-
-        requests = cell.dict.setdefault("requests", {})
-        queue = requests.get("growth")
-        if not isinstance(queue, list):
-            queue = []
-            requests["growth"] = queue
+            return None
 
         request = dict(payload)
         request["debug"] = bool(rule.get("debug") or request.get("debug", False))
-        queue.append(request)
+        return request

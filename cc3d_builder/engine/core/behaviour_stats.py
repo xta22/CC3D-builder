@@ -55,10 +55,18 @@ def record_activation(cell, behaviour, mcs):
 
 
 def record_active_step(cell, behaviour, mcs, delta=None):
-    stats = record_activation(cell, behaviour, mcs)
+    stats = behaviour_stats(cell, behaviour)
+    counted_mcs = stats.get("_active_duration_counted_mcs")
+
+    if not stats.get("active", False):
+        stats["active"] = True
+        stats["active_since_mcs"] = mcs
+        stats["activation_count"] = stats.get("activation_count", 0) + 1
 
     stats["last_active_mcs"] = mcs
-    stats["active_duration"] = stats.get("active_duration", 0) + 1
+    if counted_mcs != mcs:
+        stats["active_duration"] = stats.get("active_duration", 0) + 1
+        stats["_active_duration_counted_mcs"] = mcs
     stats["inactive_duration"] = 0
 
     if delta is not None:
@@ -84,6 +92,7 @@ def record_deactivation(cell, behaviour, mcs):
 def record_field_delta(cell, behaviour, field_name, mcs, delta):
     stats = field_behaviour_stats(cell, behaviour, field_name)
     previous_mcs = stats.get("last_active_mcs")
+    counted_mcs = stats.get("_active_duration_counted_mcs")
 
     if not stats.get("active", False):
         stats["active"] = True
@@ -92,7 +101,9 @@ def record_field_delta(cell, behaviour, field_name, mcs, delta):
 
     stats["last_active_mcs"] = mcs
     stats["interval_since_last"] = None if previous_mcs is None else mcs - previous_mcs
-    stats["active_duration"] = stats.get("active_duration", 0) + 1
+    if counted_mcs != mcs:
+        stats["active_duration"] = stats.get("active_duration", 0) + 1
+        stats["_active_duration_counted_mcs"] = mcs
     stats["last_delta"] = delta
     stats["total_delta"] = stats.get("total_delta", 0.0) + delta
     return stats

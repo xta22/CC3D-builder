@@ -240,7 +240,7 @@ DYNAMIC_NUMERIC_INPUTS = [
     },
     {
         "category": "Dynamic numeric syntax",
-        "source": "Use state expressions for cell/native states; use physical-model dictionaries for field-regulated values.",
+        "source": "Use state expressions for cell/native states; physical-model dictionary regulators are diffusion fields.",
         "items": [
             ("constant", "0.2"),
             ("state expression", "{division_count} * 20 + 50"),
@@ -255,7 +255,7 @@ DYNAMIC_NUMERIC_INPUTS = [
         "items": [
             ("field_name", "Chemical field selector; keep as a literal field name."),
             ("target_type", "Cell type selector; keep as a literal cell type name."),
-            ("regulator", "Left-hand state/field selector; keep as a literal variable name."),
+            ("regulator", "Context-dependent selector: State condition regulator is a state key; physical-model regulator is a diffusion field. Keep it literal, not {braced}."),
             ("operator", "Comparison operator; keep as one of >, >=, <, <=, ==, != when supported."),
             ("Custom.params.*", "Not automatically resolved by default, because custom scripts may need raw values."),
         ],

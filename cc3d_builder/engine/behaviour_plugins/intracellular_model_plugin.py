@@ -12,26 +12,12 @@ class IntracellularModelPlugin:
     def __init__(self, engine: Any):
         self.engine = engine
 
-    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> None:
+    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> dict[str, Any] | None:
         payload = case_payload(case)
         if not payload:
-            return
+            return None
 
         request = dict(payload)
         request.setdefault("action", "advance")
         request["debug"] = bool(rule.get("debug") or request.get("debug", False))
-
-        if cell is None:
-            queue = getattr(self.engine, "intracellular_global_queue", None)
-            if not isinstance(queue, list):
-                queue = []
-                self.engine.intracellular_global_queue = queue
-            queue.append(request)
-            return
-
-        requests = cell.dict.setdefault("requests", {})
-        queue = requests.get("intracellular_model")
-        if not isinstance(queue, list):
-            queue = []
-            requests["intracellular_model"] = queue
-        queue.append(request)
+        return request

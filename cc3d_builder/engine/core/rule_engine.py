@@ -1,6 +1,5 @@
 # rule_engine.py
 import copy
-import json
 from pathlib import Path
 import math
 import importlib.util
@@ -30,6 +29,7 @@ from cc3d_builder.engine.behaviour_plugins.intracellular_model_plugin import Int
 from cc3d_builder.engine.behaviour_plugins.subcellular_plugin import SubcellularPlugin
 from cc3d_builder.engine.core.intracellular_state import read_intracellular_value
 from cc3d_builder.engine.core.subcellular_state import read_subcellular_value
+from cc3d_builder.core.project_profile import load_json
 from cc3d_builder.core.rule_schema import case_payload, first_case_payload, validate_rules_schema
 
 
@@ -41,7 +41,6 @@ class RuleEngineSteppable(SteppableBasePy):
         super().__init__(frequency)
 
         self.rules = []
-        self.create_queue = []
         self.script_cache = {}
         self.executors = {}
         self.execution_semantics = "snapshot"
@@ -49,7 +48,6 @@ class RuleEngineSteppable(SteppableBasePy):
         self.celltype_params = {}
         self.intracellular_models = []
         self.subcellular_systems = []
-        self.intracellular_global_queue = []
         self.behaviour_registry = {
             "growth": GrowthPlugin(self),
             "differentiate": DifferentiationPlugin(self),
@@ -72,9 +70,6 @@ class RuleEngineSteppable(SteppableBasePy):
 
     def register_executor(self, behaviour, executor):
         self.executors[behaviour] = executor
-
-    def ordered_dispatch_enabled(self):
-        return self.execution_semantics in {"snapshot", "asynchronous"}
 
     # ============================================================
     # INIT
@@ -189,16 +184,35 @@ class RuleEngineSteppable(SteppableBasePy):
             print(f"ℹ️ [RuleEngine] No rules.json found at {rules_path}")
             return
 
-        with rules_path.open('r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = load_json(rules_path, None)
+        if data is None:
+            print(f"⚠️ [RuleEngine] Empty or invalid rules.json at {rules_path}; running with no rules.")
+            return
+
+        if isinstance(data, list):
+            data = {"rules": data}
+        if not isinstance(data, dict):
+            print(f"⚠️ [RuleEngine] Invalid rules.json format at {rules_path}; running with no rules.")
+            return
 
         self.rules = data.get("rules", [])
+        if not isinstance(self.rules, list):
+            print(f"⚠️ [RuleEngine] Invalid rules list at {rules_path}; running with no rules.")
+            self.rules = []
         validate_rules_schema(self.rules)
 
         self.celltype_params = data.get("celltype_params", {})
         self.intracellular_models = data.get("intracellular_models", [])
         self.subcellular_systems = data.get("subcellular_systems", [])
         self.settings = data.get("settings", {"execution_semantics": "snapshot"})
+        if not isinstance(self.celltype_params, dict):
+            self.celltype_params = {}
+        if not isinstance(self.intracellular_models, list):
+            self.intracellular_models = []
+        if not isinstance(self.subcellular_systems, list):
+            self.subcellular_systems = []
+        if not isinstance(self.settings, dict):
+            self.settings = {"execution_semantics": "snapshot"}
         self.execution_semantics = self._normalize_execution_semantics(
             self.settings.get("execution_semantics", "snapshot")
         )
@@ -418,72 +432,12 @@ class RuleEngineSteppable(SteppableBasePy):
             print(f"[RuleEngine] No steppable executor registered for behaviour '{behaviour}'")
             return False
 
-        plugin.apply(rule, event["case"], cell)
-        request = self._pop_plugin_request(behaviour, cell, event["payload"])
+        request = plugin.apply(rule, event["case"], cell)
         if request is None:
             return False
 
         executor.execute(cell, request, mcs)
         return True
-
-    def _pop_plugin_request(self, behaviour, cell, payload):
-        if behaviour == "create":
-            if not self.create_queue:
-                return None
-            return self.create_queue.pop()
-
-        if behaviour == "intracellular_model" and cell is None:
-            if not self.intracellular_global_queue:
-                return None
-            return self.intracellular_global_queue.pop()
-
-        if cell is None:
-            return None
-
-        requests = cell.dict.setdefault("requests", {})
-        if behaviour == "growth":
-            return self._pop_queue_request(requests, "growth")
-        if behaviour == "secrete/uptake":
-            return self._pop_queue_request(requests, "secretion")
-        if behaviour == "dormancy":
-            return self._pop_queue_request(requests, "dormancy")
-        if behaviour == "phagocytosis":
-            return self._pop_queue_request(requests, "phagocytosis")
-        if behaviour == "compartmentalize":
-            return self._pop_queue_request(requests, "compartmentalize")
-        if behaviour == "fpp_link":
-            return self._pop_queue_request(requests, "fpp_link")
-        if behaviour == "intracellular_model":
-            return self._pop_queue_request(requests, "intracellular_model")
-        if behaviour == "subcellular":
-            return self._pop_queue_request(requests, "subcellular")
-        if behaviour == "chemotaxis":
-            return self._pop_single_request(requests, "chemotaxis")
-        if behaviour == "force":
-            return self._pop_single_request(requests, "force")
-        if behaviour == "death":
-            return self._pop_single_request(requests, "death_init")
-        if behaviour == "differentiate":
-            mode = payload.get("mode")
-            if mode == "type_switch":
-                return self._pop_single_request(requests, "type_switch")
-            if mode == "division":
-                return self._pop_single_request(requests, "division")
-        return None
-
-    def _pop_queue_request(self, requests, key):
-        queue = requests.get(key)
-        if not isinstance(queue, list) or not queue:
-            return None
-        request = queue.pop()
-        if not queue:
-            requests[key] = []
-        return request
-
-    def _pop_single_request(self, requests, key):
-        request = requests.get(key)
-        requests[key] = None
-        return request
 
     def _ordered_rules(self):
         return list(enumerate(self.rules))
@@ -533,35 +487,6 @@ class RuleEngineSteppable(SteppableBasePy):
 
         if "state" not in cell.dict:
             cell.dict["state"] = {}
-
-        if "requests" not in cell.dict:
-            cell.dict["requests"] = {}
-
-        single_request_keys = (
-            "type_switch",
-            "division",
-            "death_init",
-            "chemotaxis",
-            "force",
-        )
-        queue_request_keys = (
-            "growth",
-            "secretion",
-            "dormancy",
-            "phagocytosis",
-            "compartmentalize",
-            "fpp_link",
-            "intracellular_model",
-            "subcellular",
-        )
-
-        requests = cell.dict["requests"]
-        for key in single_request_keys:
-            requests.setdefault(key, None)
-
-        for key in queue_request_keys:
-            if not isinstance(requests.get(key), list):
-                requests[key] = []
 
         if "_internal" not in cell.dict:
             cell.dict["_internal"] = {}
@@ -745,32 +670,30 @@ class RuleEngineSteppable(SteppableBasePy):
     def _resolve_dynamic_parameters(self, data, cell):
         """
         Recursive scanning of the case payload.
-        If any physical parameter is found to be a string containing {},
-        the system automatically retrieves the corresponding dynamic state from cell.dict and evaluates it using eval() to compute the resulting value.
+        Strings containing {state_key} placeholders are evaluated against the
+        same state/native-cell context used by dynamic frequency expressions.
         """
-        if not cell:
+        if cell is None:
             return data
 
         if isinstance(data, dict):
             resolved = {}
-            # extract all potentially existing base constants to serve as local variables during eval execution.
-            local_vars = {k: v for k, v in data.items() if isinstance(v, (int, float))}
+            local_vars = self._dynamic_parameter_context(cell)
+            local_vars.update({k: v for k, v in data.items() if isinstance(v, (int, float))})
 
             for k, v in data.items():
                 if isinstance(v, str) and "{" in v and "}" in v:
                     try:
-                        # Dynamic Substitution: Replace "{division_count}" with "cell.dict.get('division_count', 0)".
                         expr = v
-                        for key in list(cell.dict.keys()):
-                            if f"{{{key}}}" in expr:
-                                expr = expr.replace(f"{{{key}}}", str(cell.dict.get(key, 0)))
+                        for key, value in sorted(local_vars.items(), key=lambda item: len(str(item[0])), reverse=True):
+                            expr = expr.replace("{" + str(key) + "}", str(value))
 
                         # If the string still contains residual curly braces, substitute 0 as a fallback.
                         import re
                         expr = re.sub(r"\{.*?}", "0", expr)
 
                         # Execute dynamic mathematical computation
-                        resolved[k] = float(eval(expr, {"__builtins__": None}, local_vars))
+                        resolved[k] = float(eval(expr, {"__builtins__": None}, {"math": math, **local_vars}))
                     except Exception as e:
                         print(f"⚠️ [Engine Math Error] Failed to resolve express '{v}': {e}")
                         resolved[k] = v # If evaluation fails, keep the original value as a fallback.
@@ -783,6 +706,23 @@ class RuleEngineSteppable(SteppableBasePy):
             return [self._resolve_dynamic_parameters(item, cell) for item in data]
 
         return data
+
+    def _dynamic_parameter_context(self, cell):
+        context = {
+            "mcs": float(getattr(self, "current_mcs", 0)),
+        }
+
+        if cell is None:
+            return context
+
+        for key, value in self._flatten_cell_dict(cell.dict).items():
+            if isinstance(value, bool):
+                context[key] = float(value)
+            elif isinstance(value, (int, float)) and math.isfinite(float(value)):
+                context[key] = float(value)
+
+        context.update(self._native_cell_context(cell))
+        return context
 
     def _resolve_case(self, case, cell):
         """
@@ -925,6 +865,7 @@ class RuleEngineSteppable(SteppableBasePy):
             value = self._numeric_attr(cell, attr_name)
             if value is not None:
                 context[variable_name] = value
+                context[f"cell.{variable_name}"] = value
 
         return context
 

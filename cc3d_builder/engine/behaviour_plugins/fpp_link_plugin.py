@@ -8,7 +8,7 @@ class FPPLinkPlugin:
     def __init__(self, engine: Any):
         self.engine = engine
 
-    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> None:
+    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> dict[str, Any] | None:
         if cell is None:
             return
 
@@ -17,10 +17,4 @@ class FPPLinkPlugin:
         request.setdefault("mode", "nearest_type")
         request["debug"] = bool(rule.get("debug") or request.get("debug", False))
 
-        requests = cell.dict.setdefault("requests", {})
-        queue = requests.get("fpp_link")
-        if not isinstance(queue, list):
-            queue = []
-            requests["fpp_link"] = queue
-
-        queue.append(request)
+        return request

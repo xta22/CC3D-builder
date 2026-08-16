@@ -7,7 +7,7 @@ class DeathPlugin(BaseBehaviourPlugin):
 
     def apply(self, rule, case, cell):
         """
-        Queue the initial death request.
+        Build the initial death request.
 
         Death state mutation is owned by DeathSteppable so the runtime path
         stays consistent with the plugin + steppable architecture.
@@ -16,13 +16,12 @@ class DeathPlugin(BaseBehaviourPlugin):
         mode = payload.get("mode")  # "apoptosis" or "necrosis"
         if mode not in {"apoptosis", "necrosis"}:
             print(f"[DeathPlugin] Unknown death mode: {mode}")
-            return
+            return None
 
-        requests = cell.dict.setdefault("requests", {})
-        if cell.dict.get("is_dead") or requests.get("death_init") is not None:
-            return
+        if cell.dict.get("is_dead"):
+            return None
 
-        requests["death_init"] = {
+        return {
             "mode": mode,
             "params": dict(payload),
             "debug": bool(rule.get("debug") or payload.get("debug", False)),

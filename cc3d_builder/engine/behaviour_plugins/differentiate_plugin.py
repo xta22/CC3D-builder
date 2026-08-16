@@ -11,29 +11,28 @@ class DifferentiationPlugin(BaseBehaviourPlugin):
 
         payload = case_payload(case)
         if not payload:
-            return
+            return None
 
         mode = payload.get("mode")
+        request = dict(payload)
+        request["debug"] = bool(rule.get("debug") or request.get("debug", False))
 
         # =========================
         # 1️⃣ TYPE SWITCH
         # =========================
         if mode == "type_switch":
-
-            self.push_request(cell, "type_switch", payload)
-
             if rule.get("debug"):
                 print(f"[Plugin] type_switch requested for cell {cell.id}")
+            return request
 
         # =========================
         # 2️⃣ DIVISION
         # =========================
         elif mode == "division":
-
-            self.push_request(cell, "division", payload)
-
             if rule.get("debug"):
                 print(f"[Plugin] division requested for cell {cell.id}")
+            return request
 
         else:
             print(f"[Plugin] Unknown differentiate mode: {mode}")
+            return None

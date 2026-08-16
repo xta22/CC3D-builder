@@ -45,29 +45,11 @@ class IntracellularModelSteppable(SteppableBasePy):
         self._update_visualization_fields(0)
 
     def step(self, mcs):
-        if self.engine is not None and self.engine.ordered_dispatch_enabled():
-            return
         if self.cell_list is None:
             return
 
         self._initialize_models()
-
-        global_queue = getattr(self.engine, "intracellular_global_queue", []) if self.engine is not None else []
-        for request in list(global_queue):
-            self.execute(None, request, mcs)
-        if self.engine is not None:
-            self.engine.intracellular_global_queue = []
-
-        for cell in self.cell_list:
-            requests = cell.dict.setdefault("requests", {})
-            queue = requests.get("intracellular_model", [])
-            if not isinstance(queue, list) or not queue:
-                continue
-            try:
-                for request in list(queue):
-                    self.execute(cell, request, mcs)
-            finally:
-                requests["intracellular_model"] = []
+        self._update_visualization_fields(mcs)
 
     def execute(self, cell, request, mcs):
         self._initialize_models()

@@ -14,22 +14,16 @@ class PhagocytosisPlugin(BaseBehaviourPlugin):
         valid_modes = {"absorption", "engulfment", "frustrated"}
         if phago_mode not in valid_modes:
             print(f"[PhagocytosisPlugin] Unknown phagocytosis mode: {phago_mode}")
-            return
+            return None
 
         if phago_mode != "frustrated" and not target_type_name:
             print("[PhagocytosisPlugin] target_cell_type is required for absorption/engulfment")
-            return
+            return None
 
         request = dict(payload)
         request["debug"] = bool(rule.get("debug") or payload.get("debug", False))
 
-        request_dict = cell.dict.setdefault("requests", {})
-        queue = request_dict.get("phagocytosis")
-        if not isinstance(queue, list):
-            queue = []
-            request_dict["phagocytosis"] = queue
-
-        queue.append(request)
-
         if request["debug"]:
-            print(f"[PhagocytosisPlugin] Queued phagocytosis request for cell {cell.id}: {request}")
+            print(f"[PhagocytosisPlugin] Built phagocytosis request for cell {cell.id}: {request}")
+
+        return request

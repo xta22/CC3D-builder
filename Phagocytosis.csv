@@ -1,0 +1,4 @@
+id,order,behaviour,target,mode,phago_target,value_param,release_field,release_amount,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+PHAGO_ABSORB,1,phagocytosis,Macrophage,absorption,ApoptoticCell,5.0,None,0.0,threshold,,,,Environment,Oxygen,>,0.1,radius_average,3,,1,FALSE,TRUE
+PHAGO_DYNAMIC,2,phagocytosis,Macrophage,engulfment,DeadCell,"{""model"":""linear"",""regulator"":""DamageFactor"",""parameters"":{""alpha"":2.0}}",TNF_Alpha,"{""model"":""linear"",""regulator"":""DamageFactor"",""parameters"":{""alpha"":10.0}}",threshold,,,,Environment,Oxygen,>,0.1,,,,1,FALSE,TRUE
+PHAGO_FRUSTRATED,3,phagocytosis,Macrophage,frustrated,LargeCargo,0.0,IL_6,30.0,threshold,,,,Environment,Oxygen,>,0.1,,,,1,FALSE,TRUE

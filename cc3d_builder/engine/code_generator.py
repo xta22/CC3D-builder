@@ -699,13 +699,13 @@ GENERATED_HELPERS = r'''
             return data
         if isinstance(data, dict):
             resolved = {}
-            local_vars = self._numeric_context(cell)
+            local_vars = self._dynamic_parameter_context(cell)
             local_vars.update({k: v for k, v in data.items() if isinstance(v, (int, float))})
             for key, value in data.items():
                 if isinstance(value, str) and "{" in value and "}" in value:
                     try:
                         expr = value
-                        for var_key, var_value in local_vars.items():
+                        for var_key, var_value in sorted(local_vars.items(), key=lambda item: len(str(item[0])), reverse=True):
                             expr = expr.replace("{" + str(var_key) + "}", str(var_value))
                         import re
                         expr = re.sub(r"\{.*?}", "0", expr)
@@ -719,6 +719,20 @@ GENERATED_HELPERS = r'''
         if isinstance(data, list):
             return [self._resolve_dynamic_parameters(item, cell) for item in data]
         return data
+
+    def _dynamic_parameter_context(self, cell):
+        context = {
+            "mcs": float(getattr(self, "current_mcs", 0)),
+        }
+        if cell is None:
+            return context
+        for key, value in self._flatten_cell_dict(cell.dict).items():
+            if isinstance(value, bool):
+                context[key] = float(value)
+            elif isinstance(value, (int, float)) and math.isfinite(float(value)):
+                context[key] = float(value)
+        context.update(self._numeric_context(cell))
+        return context
 
     def _resolve_physical_model_values(self, target_dict, cell):
         if not isinstance(target_dict, dict):
@@ -3810,9 +3824,16 @@ GENERATED_HELPERS = r'''
         return stats
 
     def _record_active_step(self, cell, behaviour, mcs, delta=None):
-        stats = self._record_activation(cell, behaviour, mcs)
+        stats = self._behaviour_stats(cell, behaviour)
+        counted_mcs = stats.get("_active_duration_counted_mcs")
+        if not stats.get("active", False):
+            stats["active"] = True
+            stats["active_since_mcs"] = mcs
+            stats["activation_count"] = stats.get("activation_count", 0) + 1
         stats["last_active_mcs"] = mcs
-        stats["active_duration"] = stats.get("active_duration", 0) + 1
+        if counted_mcs != mcs:
+            stats["active_duration"] = stats.get("active_duration", 0) + 1
+            stats["_active_duration_counted_mcs"] = mcs
         stats["inactive_duration"] = 0
         if delta is not None:
             stats["last_delta"] = delta
@@ -3833,13 +3854,16 @@ GENERATED_HELPERS = r'''
         parent = self._behaviour_stats(cell, behaviour)
         stats = parent.setdefault(str(field_name), {})
         previous_mcs = stats.get("last_active_mcs")
+        counted_mcs = stats.get("_active_duration_counted_mcs")
         if not stats.get("active", False):
             stats["active"] = True
             stats["active_since_mcs"] = mcs
             stats["activation_count"] = stats.get("activation_count", 0) + 1
         stats["last_active_mcs"] = mcs
         stats["interval_since_last"] = None if previous_mcs is None else mcs - previous_mcs
-        stats["active_duration"] = stats.get("active_duration", 0) + 1
+        if counted_mcs != mcs:
+            stats["active_duration"] = stats.get("active_duration", 0) + 1
+            stats["_active_duration_counted_mcs"] = mcs
         stats["last_delta"] = delta
         stats["total_delta"] = stats.get("total_delta", 0.0) + delta
         return stats

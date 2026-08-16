@@ -12,18 +12,12 @@ class SubcellularPlugin:
     def __init__(self, engine: Any):
         self.engine = engine
 
-    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> None:
+    def apply(self, rule: dict[str, Any], case: Any, cell: Any) -> dict[str, Any] | None:
         if cell is None:
-            return
+            return None
 
         payload = case_payload(case)
         request = dict(payload)
         request.setdefault("action", "set_stage")
         request["debug"] = bool(rule.get("debug") or request.get("debug", False))
-
-        requests = cell.dict.setdefault("requests", {})
-        queue = requests.get("subcellular")
-        if not isinstance(queue, list):
-            queue = []
-            requests["subcellular"] = queue
-        queue.append(request)
+        return request

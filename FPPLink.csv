@@ -1,0 +1,5 @@
+id,order,behaviour,target,mode,partner_type,target_cell_id,link_lambda,target_distance,max_distance,max_search_distance,max_links,mode_param,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+FPP_NEAREST,1,fpp_link,Cell,nearest_type,PartnerCell,,10,0,0,0,1,,TRUE,,,,,,,,,,,1,FALSE,FALSE
+FPP_BY_ID,2,fpp_link,Cell,cell_id,PartnerCell,2,10,0,0,0,1,,TRUE,,,,,,,,,,,1,FALSE,FALSE
+FPP_WITHIN_RADIUS,3,fpp_link,Cell,all_within_distance,PartnerCell,,10,0,0,20,3,,TRUE,,,,,,,,,,,10,FALSE,FALSE
+FPP_CLEAR,4,fpp_link,Cell,clear,,,,,,,,,TRUE,,,,,,,,,,,1,FALSE,FALSE

@@ -9,10 +9,10 @@ class CreatePlugin(BaseBehaviourPlugin):
 
     def apply(self, rule, case, cell):
 
-        payload = case_payload(case)
+        payload = dict(case_payload(case))
 
         if not payload:
-            return
+            return None
 
         payload["debug"] = bool(rule.get("debug") or payload.get("debug", False))
-        self.engine.create_queue.append(payload)
+        return payload

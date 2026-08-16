@@ -17,27 +17,19 @@ class ForceSteppable(SteppableBasePy):
             return
 
         for cell in self.cell_list:
-            requests = cell.dict.setdefault("requests", {})
-            request = None if self.engine is not None and self.engine.ordered_dispatch_enabled() else requests.get("force")
             active_request = cell.dict.get("active_force")
 
             if cell.dict.get("is_dead"):
                 self._clear_force(cell, mcs)
-                requests["force"] = None
                 cell.dict.pop("active_force", None)
                 continue
 
-            current = request or active_request
-            if not current:
+            if not active_request:
                 continue
-            if active_request is current and cell.dict.get("_force_executed_mcs") == mcs:
+            if cell.dict.get("_force_executed_mcs") == mcs:
                 continue
 
-            try:
-                self.execute(cell, current, mcs)
-            finally:
-                if request is not None:
-                    requests["force"] = None
+            self.execute(cell, dict(active_request), mcs)
 
     def execute(self, cell, request, mcs):
         self._execute_request(cell, request, mcs)
@@ -46,7 +38,7 @@ class ForceSteppable(SteppableBasePy):
             cell.dict["active_force"] = dict(request)
         elif request.get("mode") == "clear":
             cell.dict.pop("active_force", None)
-        elif "force" in cell.dict.get("requests", {}):
+        else:
             cell.dict.pop("active_force", None)
 
     def _execute_request(self, cell, request, mcs):

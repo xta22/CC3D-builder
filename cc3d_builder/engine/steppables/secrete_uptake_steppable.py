@@ -14,26 +14,7 @@ class SecretionSteppable(SteppableBasePy):
             self.engine.register_executor("secrete/uptake", self)
 
     def step(self, mcs):
-        if self.cell_list is None:
-            return
-        if self.engine is not None and self.engine.ordered_dispatch_enabled():
-            return
-
-        for cell in self.cell_list:
-            request_dict = cell.dict.setdefault("requests", {})
-            sec_requests = request_dict.get("secretion", [])
-
-            if not sec_requests:
-                continue
-
-            try:
-                if cell.dict.get("is_dead"):
-                    continue
-
-                for req_data in list(sec_requests):
-                    self._execute_request(cell, req_data, mcs)
-            finally:
-                request_dict["secretion"] = []
+        return
 
     def execute(self, cell, req_data, mcs):
         self._execute_request(cell, req_data, mcs)

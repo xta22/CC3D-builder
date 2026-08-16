@@ -1,0 +1,4 @@
+id,order,behaviour,target,field_name,lambda,formula,coef,mode_param,target_strategy,target_cell_id,target_x,target_y,target_z,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+CHEMO_STANDARD,1,chemotaxis,Cell,ATTR,25.0,Standard,,,break,,,,,threshold,,,,Morphology,volume,>,20,,,,1,FALSE,FALSE
+CHEMO_DYNAMIC,2,chemotaxis,Cell,Oxygen,"{""model"":""linear"",""regulator"":""Nutrient"",""parameters"":{""alpha"":15.0}}",Saturation,"{""model"":""linear"",""regulator"":""Nutrient"",""parameters"":{""alpha"":200.0}}",,break,,,,,time_window,,500,1000,,,,,,,,1,FALSE,FALSE
+CHEMO_OLD_MODE_PARAM,3,chemotaxis,Cell,,,,,"field=Oxygen,lambda=15.0,formula=Saturation,coef=200.0",id,12,,,,TRUE,,,,,,,,,,,1,FALSE,TRUE

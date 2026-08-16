@@ -1,7 +1,0 @@
-<Simulation version="4.7.0">
-   <XMLScript Type="XMLScript">Simulation/Rules_project.xml</XMLScript>
-   <PythonScript Type="PythonScript">Simulation/wrapper_main.py</PythonScript>
-   <Resource Type="Python">Simulation/original_main.py</Resource>
-   <Resource Type="Python">Simulation/Rules_project_Steppables.py</Resource>
-   <Resource Type="Python">../cc3d_builder/engine/core/rule_engine.py</Resource>
-</Simulation>

@@ -13,32 +13,7 @@ class GrowthSteppable(SteppableBasePy):
             self.engine.register_executor("growth", self)
 
     def step(self, mcs):
-        if self.cell_list is None:
-            return
-
-        for cell in self.cell_list:
-            requests = cell.dict.get("requests", {})
-            growth_requests = requests.get("growth", [])
-
-            if not growth_requests:
-                continue
-
-            try:
-                if isinstance(growth_requests, dict):
-                    growth_requests = [growth_requests]
-
-                total_delta = 0.0
-                applied_count = 0
-
-                for req in list(growth_requests):
-                    delta = self.execute(cell, req, mcs, record_stats=False)
-                    total_delta += delta
-                    applied_count += 1
-
-                if applied_count:
-                    record_active_step(cell, "growth", mcs, total_delta)
-            finally:
-                requests["growth"] = []
+        return
 
     def execute(self, cell, req, mcs, record_stats=True):
         model_name = req.get("model")

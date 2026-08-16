@@ -775,7 +775,7 @@ class StructureManager:
     # VOLUME PLUGIN MANAGEMENT
     # ============================================================
 
-    def ensure_volume_plugin_empty(self):
+    def ensure_volume_plugin_empty(self, save=True, quiet=False):
 
         # current volume plugin
         plugin = self.root.find(".//Plugin[@Name='Volume']")
@@ -784,13 +784,16 @@ class StructureManager:
             # clean<VolumeEnergyParameters ... />)
             for child in list(plugin):
                 plugin.remove(child)
-            print("[StructureManager] Volume plugin cleared for Python control.")
+            if not quiet:
+                print("[StructureManager] Volume plugin cleared for Python control.")
         else:
             plugin = ET.SubElement(self.root, "Plugin")
             plugin.set("Name", "Volume")
-            print("[StructureManager] Empty Volume plugin added for Python control.")
+            if not quiet:
+                print("[StructureManager] Empty Volume plugin added for Python control.")
             
-        self.save()
+        if save:
+            self.save()
         
     # ============================================================
     # CELLTYPE
@@ -922,8 +925,7 @@ class StructureManager:
         # 1. Check or Create DiffusionSolver in "Steppable" Plugin in XML
         solver = self.root.find(".//Steppable[@Type='DiffusionSolverFE']")
         if solver is None:
-            # solver framework
-            return False
+            solver = ET.SubElement(self.root, "Steppable", attrib={"Type": "DiffusionSolverFE"})
 
         # 2. check whether field exists
         for df in solver.findall("DiffusionField"):
@@ -1420,13 +1422,23 @@ class StructureManager:
                         # ConstantValue / ConstantDerivative
                         else:
                             for val_type in ['ConstantValue', 'ConstantDerivative']:
-                                node = plane.find(val_type)
-                                if node is not None:
+                                nodes = plane.findall(val_type)
+                                if nodes:
+                                    min_val = 0.0
+                                    max_val = 0.0
+                                    for node in nodes:
+                                        position = node.get('PlanePosition')
+                                        value = float(node.get('Value') or 0.0)
+                                        if position == 'Min':
+                                            min_val = value
+                                        elif position == 'Max':
+                                            max_val = value
                                     fields_data[f_name]["boundary_conditions"][axis] = {
                                         "type": val_type,
-                                        "min_val": float(node.get('Value') or 0.0),
-                                        "max_val": float(node.get('Value') or 0.0) 
+                                        "min_val": min_val,
+                                        "max_val": max_val,
                                     }
+                                    break
 
         # 2. Extract Chemotaxis (output in list format)
         chem_plugin = self.root.find('.//Plugin[@Name="Chemotaxis"]')
@@ -1589,11 +1601,12 @@ class StructureManager:
         return fields_data
 
 
-    def ensure_field_xml_from_registry(self, field_params):
+    def ensure_field_xml_from_registry(self, field_params, verbose=True):
         """
         Regenerate clean XML nodes from scratch based on the field_params dictionary in the Registry.
         """
-        print("🚨 BUILD XML CALLED")
+        if verbose:
+            print("🚨 BUILD XML CALLED")
 
         for steppable in self.root.findall("Steppable[@Type='DiffusionSolverFE']"):
             self.root.remove(steppable)
@@ -1640,9 +1653,9 @@ class StructureManager:
 
             # Secretion through python?
             py_sec = params.get('python_secretion', False)
-            if py_sec:
+            if py_sec and verbose:
                 print(f"[SM] {field_name} uses Python secretion. Skipping XML SecretionData.")
-            else:
+            if not py_sec:
                 # If not controlled by Python, write SecretionData into the XML as-is
                 if 'SecretionData' in params:
                     sec_data_node = ET.SubElement(field_node, 'SecretionData')
@@ -1657,7 +1670,8 @@ class StructureManager:
                 for axis, config in params['boundary_conditions'].items():
                     plane_node = ET.SubElement(bc_node, 'Plane', attrib={'Axis': axis})
                     bc_type = config.get('type', 'ConstantValue')
-                    print(f"DEBUG: Axis {axis} config: {config}")
+                    if verbose:
+                        print(f"DEBUG: Axis {axis} config: {config}")
 
                     if bc_type == "Periodic":
                         ET.SubElement(plane_node, 'Periodic')

@@ -12,18 +12,15 @@ class SecreteUptakePlugin:
         field_name = payload.get("field_name")
         secret_mode = payload.get("secret_mode")
         if not field_name or not secret_mode:
-            return
+            return None
 
         request = dict(payload)
+        request["debug"] = bool(rule.get("debug") or request.get("debug", False))
 
-        if "requests" not in cell.dict:
-            cell.dict["requests"] = {}
-
-        cell.dict["requests"].setdefault("secretion", [])
-        cell.dict["requests"]["secretion"].append(request)
-
-        if rule.get("debug") or request.get("debug"):
+        if request.get("debug"):
             print(
-                f"[Secrete/UptakePlugin] queued {secret_mode} "
+                f"[Secrete/UptakePlugin] built {secret_mode} "
                 f"for cell {cell.id} on field {field_name}"
             )
+
+        return request

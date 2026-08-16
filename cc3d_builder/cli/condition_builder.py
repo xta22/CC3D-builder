@@ -20,8 +20,189 @@ ENVIRONMENT_SAMPLING_MODES = {
 
 
 def _ask_dynamic_number(prompt, default=0.0):
-    raw = input(f"{prompt} [default {default}]: ").strip()
+    raw = input(
+        f"{prompt} [default {default}; constant or {{state_key}} expression. "
+        "JSON physical-model regulator = diffusion field]: "
+    ).strip()
     return parse_dynamic_numeric(raw if raw else default, default)
+
+
+def _clean_user_label(value):
+    text = str(value or "").strip()
+    while len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        text = text[1:-1].strip()
+    return text
+
+
+def _parse_condition_value(raw, default=0.0):
+    text = str(raw if raw is not None else "").strip()
+    if not text:
+        return default
+    return parse_dynamic_numeric(text, text)
+
+
+def _ask_operator(default=">"):
+    operators = [">", "<", ">=", "<=", "==", "!="]
+    print("Operators:")
+    for index, operator in enumerate(operators, 1):
+        default_marker = " (default)" if operator == default else ""
+        print(f"  {index} - {operator}{default_marker}")
+    raw = input(f"Operator [{default}]: ").strip()
+    if not raw:
+        return default
+    if raw.isdigit():
+        index = int(raw) - 1
+        if 0 <= index < len(operators):
+            return operators[index]
+    return raw if raw in operators else default
+
+
+def _choose_registered_name(names, title, manual_prompt):
+    names = [str(name) for name in names if str(name).strip()]
+    if not names:
+        return input(manual_prompt).strip()
+
+    print(f"\n{title}:")
+    for index, name in enumerate(names, 1):
+        print(f"  {index} - {name}")
+    raw = input("Choice or explicit name [1]: ").strip()
+    if not raw:
+        return names[0]
+    if raw.isdigit():
+        index = int(raw) - 1
+        if 0 <= index < len(names):
+            return names[index]
+    return raw
+
+
+def _intracellular_model_names(registry):
+    names = []
+    for spec in getattr(registry, "intracellular_models", []) or []:
+        if not isinstance(spec, dict):
+            continue
+        name = spec.get("model_name") or spec.get("id") or spec.get("alias")
+        if name:
+            names.append(str(name))
+    return names
+
+
+def _subcellular_system_names(registry):
+    names = []
+    for spec in getattr(registry, "subcellular_systems", []) or []:
+        if not isinstance(spec, dict):
+            continue
+        name = spec.get("id") or spec.get("name") or spec.get("system")
+        if name:
+            names.append(str(name))
+    return names
+
+
+def _ask_intracellular_state_condition(registry=None):
+    model_name = _choose_registered_name(
+        _intracellular_model_names(registry),
+        "Intracellular models",
+        "Model registry id or model_name: ",
+    )
+    if not model_name:
+        raise ValueError("IntracellularState condition requires a model")
+
+    variable = input("Model variable / species / MaBoSS node name (e.g. NICD): ").strip()
+    if not variable:
+        raise ValueError("IntracellularState condition requires a variable")
+
+    operator = _ask_operator(default=">")
+    threshold = _parse_condition_value(input("Threshold value: ").strip(), 0.0)
+
+    return {
+        "condition_type": "IntracellularState",
+        "params": {
+            "model": model_name.strip(),
+            "variable": variable,
+            "operator": operator,
+            "threshold": threshold,
+        },
+    }
+
+
+def _subcellular_stages_for(registry, system_name):
+    requested = _clean_user_label(system_name)
+    for spec in getattr(registry, "subcellular_systems", []) or []:
+        if not isinstance(spec, dict):
+            continue
+        aliases = {
+            _clean_user_label(spec.get("id")),
+            _clean_user_label(spec.get("name")),
+            _clean_user_label(spec.get("system")),
+        }
+        aliases.discard("")
+        if requested not in aliases:
+            continue
+        return [_clean_user_label(stage) for stage in spec.get("stages", []) if _clean_user_label(stage)]
+    return []
+
+
+def _ask_subcellular_stage_threshold(registry, system_name):
+    stages = _subcellular_stages_for(registry, system_name)
+    if stages:
+        print("Registered stages:")
+        for index, stage in enumerate(stages, 1):
+            print(f"  {index} - {stage}")
+    raw = input("Stage threshold (name or registered stage number): ").strip()
+    if raw.isdigit() and stages:
+        index = int(raw) - 1
+        if 0 <= index < len(stages):
+            return stages[index]
+    return _clean_user_label(raw)
+
+
+def _ask_subcellular_state_condition(registry=None):
+    system = _choose_registered_name(
+        _subcellular_system_names(registry),
+        "Subcellular systems",
+        "System ID: ",
+    )
+    if not system:
+        raise ValueError("SubcellularState condition requires a system")
+
+    print("\nSubcellular value:")
+    print("  1 - stage")
+    print("  2 - component count")
+    print("  3 - localization value")
+    print("  4 - nested path")
+    mode = input("Value mode [1]: ").strip() or "1"
+
+    params = {"system": _clean_user_label(system)}
+    if mode == "2":
+        component = input("Component name: ").strip()
+        if not component:
+            raise ValueError("Component name is required")
+        params["component"] = _clean_user_label(component)
+        operator = _ask_operator(default=">")
+        threshold = _parse_condition_value(input("Threshold value [default 0.0]: ").strip(), 0.0)
+    elif mode == "3":
+        location = input("Localization key: ").strip()
+        if not location:
+            raise ValueError("Localization key is required")
+        params["location"] = _clean_user_label(location)
+        operator = _ask_operator(default=">")
+        threshold = _parse_condition_value(input("Threshold value [default 0.0]: ").strip(), 0.0)
+    elif mode == "4":
+        variable = input("Nested path under the system: ").strip()
+        if not variable:
+            raise ValueError("Nested path is required")
+        params["variable"] = _clean_user_label(variable)
+        operator = _ask_operator(default=">")
+        threshold = _parse_condition_value(input("Threshold value [default 0.0]: ").strip(), 0.0)
+    else:
+        params["variable"] = "stage"
+        operator = _ask_operator(default="==")
+        threshold = _ask_subcellular_stage_threshold(registry, system)
+        if not threshold:
+            raise ValueError("Stage threshold is required")
+
+    params["operator"] = operator
+    params["threshold"] = threshold
+    return {"condition_type": "SubcellularState", "params": params}
 
 
 def _ask_environment_sampling_params():
@@ -52,7 +233,7 @@ def _ask_environment_sampling_params():
 
     return params
 
-def build_condition():
+def build_condition(registry=None):
 
     print("\nSelect condition type:")
     print("1 - Environment (Field Threshold)")
@@ -64,6 +245,8 @@ def build_condition():
     print("7 - Logical block (AND/OR/NOT)")
     print("8 - Custom Script")
     print("9 - Always True")
+    print("10 - Intracellular State")
+    print("11 - Subcellular State")
 
     choice = input("Choice: ").strip()
 
@@ -129,7 +312,7 @@ def build_condition():
         duration = _ask_dynamic_number("How many MCS must this state last?", 50)
         
         print("\n>>> Now define the base condition that needs to be maintained:")
-        sub_condition = build_condition() 
+        sub_condition = build_condition(registry)
 
         return {
             "condition_type": "Duration",
@@ -181,7 +364,7 @@ def build_condition():
         conditions = []
         for i in range(n):
             print(f"\n--- Sub-condition {i+1} for {logic} ---")
-            conditions.append(build_condition()) 
+            conditions.append(build_condition(registry))
 
         return {
             "condition_type": f"Logic_{logic}",
@@ -220,6 +403,18 @@ def build_condition():
             "script_path": script_path,
             "params": custom_params
         }
+
+    # =========================
+    # 10. Intracellular State
+    # =========================
+    elif choice == "10":
+        return _ask_intracellular_state_condition(registry)
+
+    # =========================
+    # 11. Subcellular State
+    # =========================
+    elif choice == "11":
+        return _ask_subcellular_state_condition(registry)
 
     # =========================
     # 9. Always True

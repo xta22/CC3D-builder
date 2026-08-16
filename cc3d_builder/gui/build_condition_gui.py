@@ -24,7 +24,13 @@ def _ask_dynamic_number(parent, title, label, default=0.0):
     raw, ok = QInputDialog.getText(
         parent,
         title,
-        f"{label}\nSupports constants, {{state_key}} expressions, or JSON physical-model dictionaries:",
+        (
+            f"{label}\n"
+            "Supports:\n"
+            "- constant numbers, e.g. 0.5\n"
+            "- state/native expressions, e.g. {volume} * 0.01\n"
+            "- JSON physical-model dictionaries, where regulator means diffusion field"
+        ),
         text=str(default),
     )
     if not ok:

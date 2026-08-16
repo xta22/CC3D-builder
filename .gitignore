@@ -20,3 +20,16 @@ __pycache__/
 *.py[cod]
 *$py.classRules_project_cc3d_*/
 Rules_project_cc3d_0*/
+# Local/generated RuleParser artifacts
+Rules_project/
+saved_rule_sets/
+**/simulation_time_series/
+
+# Local machine/runtime files
+.DS_Store
+**/.DS_Store
+.env
+*.sqlite
+*.bak_*
+__pycache__/
+*.py[cod]

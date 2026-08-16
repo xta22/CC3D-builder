@@ -1,18 +1,21 @@
 # simulation_registry.py
 import ast
+import contextlib
+import io
 import json
+import re
 import sqlite3
 from pathlib import Path
 from cc3d_builder.core.rule_schema import case_payload
 from cc3d_builder.core.structure_manager import StructureManager
-from cc3d_builder.core.project_profile import read_active_project, sync_sandbox_rules_to_profile
+from cc3d_builder.core.project_profile import load_json, read_active_project, sync_sandbox_rules_to_profile
 from cc3d_builder.engine.code_generator import CC3DDecompiledGenerator
 from cc3d_builder.injector.steppable_injector import SteppableInjector
 
 class SimulationRegistry:
 
     def __init__(self, project_path,structure_manager=None):
-        # here it is sandbox_dir from main.py and main_editor.py
+        # here it is sandbox_dir from cli/main.py and main_editor.py
         self.project_path = Path(project_path)
         self.sm = structure_manager
 
@@ -27,35 +30,25 @@ class SimulationRegistry:
         self.intracellular_models = []
         self.subcellular_systems = []
         self.settings = {"execution_semantics": "snapshot"}
+        self.last_registration_summary = {}
 
-    def add_celltype_params(self, name, target, lam, count=5, should_init=True):
-        self.celltype_params[name] = {
-            "targetVolume": target,
-            "lambdaVolume": lam,
-            "initial_count": count,          
-             "should_initialize": should_init
-        }
-        self.save()
+    def _reset_state(self):
+        self.rules = []
+        self.celltype_params = {}
+        self.field_params = {}
+        self.intracellular_models = []
+        self.subcellular_systems = []
+        self.settings = {"execution_semantics": "snapshot"}
+        self._build_index()
 
-    # ============================================================
-    # LOAD
-    # ============================================================
-
-    def load(self):
-        if not self.rules_path.exists():
-            self.rules = []
-            self.celltype_params = {}
-            self.field_params = {}
-            self.intracellular_models = []
-            self.subcellular_systems = []
-            self.settings = {"execution_semantics": "snapshot"}
-            return
-
-        with self.rules_path.open("r", encoding='utf-8') as f:
-            data = json.load(f)
+    def _apply_rules_data(self, data):
+        if isinstance(data, list):
+            data = {"rules": data}
 
         if not isinstance(data, dict):
-            raise Exception("Invalid rules.json format: expected dict")
+            print(f"⚠️ Invalid rules.json format at {self.rules_path}; expected object. Using empty rules.")
+            self._reset_state()
+            return False
 
         self.rules = data.get("rules", [])
         self.celltype_params = data.get("celltype_params", {})
@@ -63,6 +56,56 @@ class SimulationRegistry:
         self.intracellular_models = data.get("intracellular_models", [])
         self.subcellular_systems = data.get("subcellular_systems", [])
         self.settings = data.get("settings", {"execution_semantics": "snapshot"})
+
+        if not isinstance(self.rules, list):
+            print(f"⚠️ Invalid rules list in {self.rules_path}; using empty rules.")
+            self.rules = []
+        if not isinstance(self.celltype_params, dict):
+            self.celltype_params = {}
+        if not isinstance(self.field_params, dict):
+            self.field_params = {}
+        if not isinstance(self.intracellular_models, list):
+            self.intracellular_models = []
+        if not isinstance(self.subcellular_systems, list):
+            self.subcellular_systems = []
+        if not isinstance(self.settings, dict):
+            self.settings = {"execution_semantics": "snapshot"}
+
+        self._build_index()
+        return True
+
+    def add_celltype_params(
+        self,
+        name,
+        target,
+        lam,
+        count=5,
+        should_init=True,
+        autosave=True,
+        rebuild_artifacts=False,
+    ):
+        self.celltype_params[name] = {
+            "targetVolume": target,
+            "lambdaVolume": lam,
+            "initial_count": count,          
+             "should_initialize": should_init
+        }
+        if autosave:
+            self.save(rebuild_artifacts=rebuild_artifacts, quiet=not rebuild_artifacts)
+
+    # ============================================================
+    # LOAD
+    # ============================================================
+
+    def load(self):
+        if not self.rules_path.exists():
+            self._reset_state()
+        else:
+            data = load_json(self.rules_path, None)
+            if data is None:
+                self._reset_state()
+            else:
+                self._apply_rules_data(data)
         
         if self.sm:
             self.sync_with_xml()
@@ -89,9 +132,7 @@ class SimulationRegistry:
     # ============================================================
 
     def add_rule(self, rule):
-        print("before append:", len(self.rules), rule.get("id"), id(rule))
         self.rules.append(rule)
-        print("after append:", len(self.rules))
         self._build_index()
         # self.save()
 
@@ -145,64 +186,138 @@ class SimulationRegistry:
     # SAVE JSON
     # ============================================================
 
-    def save(self):
+    def _rules_payload(self):
+        return {
+            "rules": self.rules,
+            "celltype_params": self.celltype_params,
+            "field_params": self.field_params,
+            "intracellular_models": self.intracellular_models,
+            "subcellular_systems": self.subcellular_systems,
+            "settings": self.settings,
+        }
+
+    def save_state(self, sync_profile=True, quiet=False):
         self.sync_chemotaxis_placeholders_from_rules()
         self.sync_intracellular_field_placeholders_from_models()
 
+        self.rules_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.rules_path, "w") as f:
-            json.dump({
-                "rules": self.rules,
-                "celltype_params": self.celltype_params,
-                "field_params": self.field_params,
-                "intracellular_models": self.intracellular_models,
-                "subcellular_systems": self.subcellular_systems,
-                "settings": self.settings,
-            }, f, indent=2)
+            json.dump(self._rules_payload(), f, indent=2)
 
+        profile_synced = False
         try:
-            if sync_sandbox_rules_to_profile(self.project_path):
-                print("💾 [Profile] Project .ruleparser/rules.json synchronized.")
+            if sync_profile and sync_sandbox_rules_to_profile(self.project_path):
+                profile_synced = True
+                if not quiet:
+                    print("💾 [Profile] Project .ruleparser/rules.json synchronized.")
         except Exception as exc:
-            print(f"⚠️ [Profile] Could not sync project .ruleparser/rules.json: {exc}")
-        
-        if self.sm:
-            if self.sm.ensure_celltypes_from_registry(self.celltype_params):
-                self.sm.save()
+            if not quiet:
+                print(f"⚠️ [Profile] Could not sync project .ruleparser/rules.json: {exc}")
 
-            self.sm.ensure_volume_plugin_empty()
+        self._build_index()
+        return {
+            "rules_path": str(self.rules_path),
+            "profile_synced": profile_synced,
+        }
 
-            if self._sync_initializers_to_xml(self.sm):
-                self.sm.save()
+    def save(self, rebuild_artifacts=True, quiet=False):
+        if rebuild_artifacts:
+            return self.commit_artifacts(quiet=quiet)
+        return self.save_state(quiet=quiet)
 
-            if self._sync_contact_overrides_to_xml(self.sm):
-                self.sm.save()
+    def commit_artifacts(self, quiet=False):
+        if quiet:
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                return self._commit_artifacts_impl(quiet=True)
+        return self._commit_artifacts_impl(quiet=False)
 
-            if self._sync_fpp_parameters_to_xml(self.sm):
-                self.sm.save()
+    def _commit_artifacts_impl(self, quiet=False):
+        state_summary = self.save_state(quiet=True)
 
-            if self._sync_external_potential_to_xml(self.sm):
-                self.sm.save()
+        xml_updated = False
+        dependencies_checked = False
+        volume_markers_synced = False
+        code_generated = False
+        generator_error = None
 
-            if self._sync_connectivity_to_xml(self.sm):
-                self.sm.save()
+        sm = self.sm
+        if sm is None:
+            try:
+                sm = StructureManager(self.project_path)
+                self.sm = sm
+            except Exception:
+                sm = None
 
-            self.sm.ensure_field_xml_from_registry(self.field_params)
-            self.sm.save()
+        if sm:
+            if sm.ensure_celltypes_from_registry(self.celltype_params):
+                xml_updated = True
+                sm.save()
 
-            print("🔍 [Registry] Checking XML dependencies for all rules...")
-            self.sm.check_and_inject_dependencies({"rules": self.rules})
+            sm.ensure_volume_plugin_empty(save=True, quiet=quiet)
+            xml_updated = True
+
+            if self._sync_initializers_to_xml(sm):
+                xml_updated = True
+                sm.save()
+
+            if self._sync_contact_overrides_to_xml(sm):
+                xml_updated = True
+                sm.save()
+
+            if self._sync_fpp_parameters_to_xml(sm):
+                xml_updated = True
+                sm.save()
+
+            if self._sync_external_potential_to_xml(sm):
+                xml_updated = True
+                sm.save()
+
+            if self._sync_connectivity_to_xml(sm):
+                xml_updated = True
+                sm.save()
+
+            sm.ensure_field_xml_from_registry(self.field_params, verbose=not quiet)
+            sm.save()
+            xml_updated = True
+
+            if not quiet:
+                print("🔍 [Registry] Checking XML dependencies for all rules...")
+            sm.check_and_inject_dependencies({"rules": self.rules})
+            dependencies_checked = True
 
         self._sync_volume_markers_to_steppables()
+        volume_markers_synced = True
 
         try:
             generator = CC3DDecompiledGenerator(self, steppable_class_name=self._project_steppable_class_name())
             generator.save_to_file(self.project_path / "Simulation")
-            target_dir = self.project_path / "Simulation"
-            print(f"🚀 [Generator] SimulationStepCode.py has been re-compiled in {target_dir}.")
+            code_generated = True
+            if not quiet:
+                target_dir = self.project_path / "Simulation"
+                print(f"🚀 [Generator] SimulationStepCode.py has been re-compiled in {target_dir}.")
         except Exception as e:
-            print(f"❌ [Generator] Failed to compile rules: {e}")
+            generator_error = str(e)
+            if not quiet:
+                print(f"❌ [Generator] Failed to compile rules: {e}")
 
         self._enforce_player_display_defaults()
+
+        return {
+            **state_summary,
+            "xml_updated": xml_updated,
+            "dependencies_checked": dependencies_checked,
+            "volume_markers_synced": volume_markers_synced,
+            "code_generated": code_generated,
+            "generator_error": generator_error,
+            "rule_count": len(self.rules),
+            "celltypes": [
+                str(name)
+                for name in self.celltype_params.keys()
+                if str(name).lower() != "medium"
+            ],
+            "fields": list(self.field_params.keys()),
+        }
 
     def _project_steppable_class_name(self):
         inferred_from_project = self._active_project_steppable_class_name()
@@ -624,17 +739,11 @@ class SimulationRegistry:
     def load_from_internal_json(self):
         """When the software starts or a project is loaded, restore the rules from the internal JSON."""
         if self.rules_path.exists():
-            with self.rules_path.open('r', encoding='utf-8') as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    self.rules = data.get("rules", [])
-                    self.celltype_params = data.get("celltype_params", {})
-                    self.field_params = data.get("field_params", {})
-                    self.intracellular_models = data.get("intracellular_models", [])
-                    self.subcellular_systems = data.get("subcellular_systems", [])
-                    self.settings = data.get("settings", {"execution_semantics": "snapshot"})
-                else:
-                    self.rules = data
+            data = load_json(self.rules_path, None)
+            if data is None:
+                self._reset_state()
+                return True
+            self._apply_rules_data(data)
             return True
         return False
 
@@ -649,27 +758,94 @@ class SimulationRegistry:
 
         xml_names = self.sm.get_xml_cell_types()
         xml_fields = self.sm.get_all_fields_from_xml()
+        marker_volume_params = self._volume_params_from_steppable_markers()
+        xml_volume_params = {}
+        if hasattr(self.sm, "migrate_volume_data"):
+            try:
+                xml_volume_params = self.sm.migrate_volume_data()
+            except Exception as exc:
+                print(f"⚠️ [Sync] Could not read XML VolumeEnergyParameters: {exc}")
         modified = False
         for name in xml_names:
+            volume_params = self._volume_params_for_celltype(
+                name,
+                marker_volume_params,
+                xml_volume_params,
+            )
             if name not in self.celltype_params:
                 print(f"🔗 [Sync] Adding XML cell type to registry: {name}")
                 self.celltype_params[name] = {
                     "should_initialize": True,
                     "initial_count": 5,   
-                    "targetVolume": 50.0,
-                    "lambdaVolume": 2.0
+                    "targetVolume": volume_params.get("targetVolume", 50.0),
+                    "lambdaVolume": volume_params.get("lambdaVolume", 2.0)
                 }
                 modified = True
+            elif isinstance(self.celltype_params.get(name), dict):
+                params = self.celltype_params[name]
+                for key in ("targetVolume", "lambdaVolume"):
+                    if key not in params and key in volume_params:
+                        params[key] = volume_params[key]
+                        modified = True
 
         for f_name, params in xml_fields.items():
-        # If this field is not yet present in the registry memory, use the XML as the source of truth first
-            self.field_params[f_name] = params
+            # Use XML as a fallback only. The profile JSON is the project-level
+            # source of truth once RuleParser has saved field parameters.
+            if f_name not in self.field_params:
+                self.field_params[f_name] = params
+                modified = True
         
         if modified:
-            self.save() 
+            self.save(rebuild_artifacts=False, quiet=True)
+
+    @staticmethod
+    def _volume_params_for_celltype(celltype_name, marker_volume_params, xml_volume_params):
+        name = str(celltype_name)
+        marker_params = marker_volume_params.get(name.upper(), {})
+
+        xml_params = xml_volume_params.get(name, {})
+        if not xml_params:
+            for xml_name, params in xml_volume_params.items():
+                if str(xml_name).lower() == name.lower():
+                    xml_params = params
+                    break
+
+        return {**xml_params, **marker_params}
+
+    def _volume_params_from_steppable_markers(self):
+        if not self.py_path.exists():
+            return {}
+
+        try:
+            content = self.py_path.read_text(encoding="utf-8")
+        except OSError:
+            return {}
+
+        marker_pattern = re.compile(
+            r"# === CC3D_VOLUME_(?P<name>[A-Z0-9_]+) START ===(?P<body>.*?)"
+            r"# === CC3D_VOLUME_(?P=name) END ===",
+            re.DOTALL,
+        )
+        value_pattern = re.compile(
+            r"cell\.(?P<key>targetVolume|lambdaVolume)\s*=\s*"
+            r"(?P<value>[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)"
+        )
+
+        params_by_type = {}
+        for marker in marker_pattern.finditer(content):
+            params = {}
+            for value_match in value_pattern.finditer(marker.group("body")):
+                try:
+                    params[value_match.group("key")] = float(value_match.group("value"))
+                except ValueError:
+                    continue
+            if params:
+                params_by_type[marker.group("name")] = params
+
+        return params_by_type
 
 
-    def add_field_params(self, field_name, params):
+    def add_field_params(self, field_name, params, autosave=True, rebuild_artifacts=False):
         # Unified conversion function
         def get_val(keys, default):
             for k in keys:
@@ -691,7 +867,8 @@ class SimulationRegistry:
             normalized["boundary_conditions"] = self.field_params[field_name].get("boundary_conditions", {})
 
         self.field_params[field_name] = normalized
-        self.save()
+        if autosave:
+            self.save(rebuild_artifacts=rebuild_artifacts, quiet=not rebuild_artifacts)
 
     def get_all_fields(self):
         """Return a dictionary of all fields {field_name: params_dict}"""

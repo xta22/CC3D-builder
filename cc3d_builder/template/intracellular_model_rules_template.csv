@@ -1,0 +1,4 @@
+id,behaviour,target,frequency,when_type,regulator_type,regulator,operator,value,model,action,sync_inputs,step_model,sync_outputs,variable,inputs,outputs
+1,intracellular_model,Tip,1,TRUE,,,,,NotchSBML,advance,TRUE,TRUE,TRUE,,"[]","[]"
+2,intracellular_model,Tip,1,intracellular_state,,NICD,>=,0.5,NotchSBML,sync_outputs,TRUE,TRUE,TRUE,,"[]","[{""model_var"": ""NICD"", ""to"": ""state"", ""key"": ""notch_active""}]"
+3,intracellular_model,Tip,10,TRUE,,,,1.0,NotchSBML,set_variable,TRUE,TRUE,TRUE,NICD,"[]","[]"

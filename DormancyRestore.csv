@@ -1,0 +1,4 @@
+id,order,behaviour,target,mode,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+DORMANT_LOW_O2,1,dormancy,CellA,dormant,threshold,,,,Environment,Oxygen,<,0.1,cell_average,,,1,FALSE,TRUE
+RESTORE_O2,2,dormancy,CellA,reactivate,threshold,,,,Environment,Oxygen,>=,0.3,,,,5,FALSE,TRUE
+DORMANT_AFTER_DIVISION,3,dormancy,CellB,dormant,state,,,,State,division_count,>=,1,,,,1,TRUE,TRUE

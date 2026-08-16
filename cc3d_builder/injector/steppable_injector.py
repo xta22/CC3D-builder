@@ -103,7 +103,6 @@ class SteppableInjector:
             "for cell in self.cell_list:",
             "    if \"state\" not in cell.dict:",
             "        cell.dict[\"state\"] = {}",
-            "        cell.dict[\"requests\"] = {}",
             "        cell.dict[\"_internal\"] = {}",
         ]
 

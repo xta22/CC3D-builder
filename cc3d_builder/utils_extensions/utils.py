@@ -7,10 +7,58 @@ from cc3d_builder.utils_extensions.rule_parsing import (
 )
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.core.rule_schema import validate_rule_schema
-from PyQt5.QtWidgets import (
-    QInputDialog, QDialog, QApplication
-)
-import sys
+
+
+def _ask_cli_float(prompt, default):
+    raw = input(f"{prompt} [{default}]: ").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        print(f"Invalid number, using default {default}")
+        return default
+
+
+def _ask_cli_bool(prompt, default=False):
+    suffix = "Y/n" if default else "y/N"
+    raw = input(f"{prompt} ({suffix}): ").strip().lower()
+    if not raw:
+        return default
+    return raw in {"y", "yes", "1", "true", "on"}
+
+
+def _ask_field_params_cli(name):
+    print(f"\n[New Field: {name}] Configure diffusion field")
+    solver = input("Solver [DiffusionSolverFE]: ").strip() or "DiffusionSolverFE"
+    diffusion = _ask_cli_float("Diffusion constant", 0.01)
+    decay = _ask_cli_float("Decay constant", 0.0001)
+    initial = input("Initial concentration expression [0.0]: ").strip() or "0.0"
+    python_secretion = _ask_cli_bool("Control secretion through Python", False)
+
+    boundary_conditions = {}
+    if _ask_cli_bool("Configure boundary conditions", False):
+        for axis in ["X", "Y", "Z"]:
+            bc_type = input(f"{axis} boundary type [Periodic/ConstantDerivative/ConstantValue, default Periodic]: ").strip()
+            bc_type = bc_type or "Periodic"
+            if bc_type == "Periodic":
+                boundary_conditions[axis] = {"type": "Periodic"}
+            else:
+                boundary_conditions[axis] = {
+                    "type": bc_type,
+                    "min_val": _ask_cli_float(f"{axis}.min value", 0.0),
+                    "max_val": _ask_cli_float(f"{axis}.max value", 0.0),
+                }
+
+    return {
+        "solver": solver,
+        "diffusion_constant": diffusion,
+        "decay_constant": decay,
+        "initial_expression": initial,
+        "boundary_conditions": boundary_conditions,
+        "chemotaxis": [],
+        "python_secretion": python_secretion,
+    }
 
 def ask_params_cli(mode, name, registry = None):
     """ CLI entry """
@@ -19,22 +67,7 @@ def ask_params_cli(mode, name, registry = None):
         l = float(input(f"[New Type: {name}] Lambda Volume [10]: ") or 10)
         return {"targetVolume": v, "lambdaVolume": l}
     elif mode == "field":
-        print("Launching Diffusion Equation Solvers Now...")
-        from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
-        app = QApplication.instance()
-        
-        if not app:
-            app = QApplication(sys.argv) # ??? 
-
-        available_cells = [] # compatibility ??
-        if registry:
-            available_cells = list(registry.celltype_params.keys())
-        dialog = FieldSetupDialog(name, available_cells)
-        
-        if dialog.exec_() == QDialog.Accepted:
-            result = dialog.get_data()
-            print(f"✅ Configuration received from GUI.")
-            return result
+        return _ask_field_params_cli(name)
 
     return None
 
@@ -42,6 +75,8 @@ def ask_params_gui(mode, name, parent):
     """
     Generic parameter retriever: supports both CellType and Field
     """
+    from PyQt5.QtWidgets import QInputDialog, QDialog
+
     print(f"DEBUG: ask_params_gui called with mode='{mode}', name='{name}'")
     if mode == "celltype":
         target, ok1 = QInputDialog.getDouble(
@@ -88,6 +123,14 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
         raise ValueError("Rule registration expects build_rule() output with non-empty flat cases")
 
     validate_rule_schema(rule)
+    summary = {
+        "rule_id": rule.get("id"),
+        "new_celltypes": [],
+        "reused_celltypes": [],
+        "new_fields": [],
+        "reused_fields": [],
+        "ignored_field_tokens": [],
+    }
 
     # 1. Handle new cell types (unchanged, since cell_type extraction is usually reliable)
     new_types = extract_celltypes_from_rule(rule)
@@ -96,48 +139,50 @@ def handle_new_rule_registration(registry, rule, input_handler, sm, injector):
             print(f"🐣 [New CellType] Found: {ct}. Requesting parameters...")
             params_ct = input_handler("celltype", ct, registry)
             if params_ct:
-                injector.ensure_volume_start_code(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
-                registry.add_celltype_params(ct, params_ct['targetVolume'], params_ct['lambdaVolume'])
+                registry.add_celltype_params(
+                    ct,
+                    params_ct['targetVolume'],
+                    params_ct['lambdaVolume'],
+                    autosave=False,
+                    rebuild_artifacts=False,
+                )
+                summary["new_celltypes"].append(ct)
+        else:
+            summary["reused_celltypes"].append(ct)
 
     # 2. Global field scanning (no longer relying on c_type, but directly inspecting fields in the rule)
     # extract_fields_from_rule internally scans when.field_name and flat case payload fields.
     new_fields = extract_fields_from_rule(rule)
-    print(f"🕵️ [PRE-CHECK 1] extract_fields_from_rule returned: {new_fields} for rule ID: {rule.get('id')}")
     # Define keywords to exclude (morphology, contact logic, etc.)
     # These may appear in regulator positions but are NOT diffusion fields
     morph_keywords = ["elongation", "contact", "distance", "sphericity", "surface"]
     
     for f_name in new_fields:
         # Only trigger configuration if not excluded and not already registered
-        print(f"🕵️ [PRE-CHECK 2] Processing individual field inside loop: '{f_name}'")
         if f_name.lower() not in morph_keywords:
             in_registry = f_name in registry.field_params
-            print(f"🕵️ [PRE-CHECK 3] Field '{f_name}' -> Already in registry field_params? {in_registry}")
             if f_name not in registry.field_params:
-                print(f"🧪 [New Field Detected] Found: {f_name}. Checking XML/Registry...")
-                # sm.ensure_field ensures the base XML tags exist
-                if sm.ensure_field(f_name):
-                    print(f"⚙️ [Configure] Opening diffusion setup for: {f_name}")
-                    params = input_handler("field", f_name, registry)
-                    if params:
-                        registry.add_field_params(f_name, params)
+                print(f"🧪 [New Field Detected] Found: {f_name}.")
+                print(f"⚙️ [Configure] Opening diffusion setup for: {f_name}")
+                params = input_handler("field", f_name, registry)
+                if params:
+                    registry.add_field_params(f_name, params, autosave=False, rebuild_artifacts=False)
+                    summary["new_fields"].append(f_name)
+            elif in_registry:
+                summary["reused_fields"].append(f_name)
         else:
-            # If it's a morphology keyword, ensure required XML plugins exist
-            print(f"📏 [Morphology/Logic] '{f_name}' detected. Ensuring XML plugins...")
-            if f_name.lower() == "elongation":
-                sm._ensure_plugin_exists("MomentOfInertia")
-            elif f_name.lower() == "contact":
-                sm._ensure_plugin_exists("Contact")
+            summary["ignored_field_tokens"].append(f_name)
 
-    # 3. Injection and persistence (unchanged)
+    # 3. Registry persistence. Artifact rebuild/code generation happens once
+    # at the final commit step, not during each rule registration.
     if rule not in registry.rules:
         registry.rules.append(rule)
-    
-    from cc3d_builder.injector.inject import process_and_inject_rule
-    print(f"💉 [Inject] Generating Python code for rule {rule.get('id')}...")
-    process_and_inject_rule(registry.project_path, registry, rule)
-    
-    print(f"✅ [Handle] Registration for rule {rule.get('id')} finished.\n")
+    registry._build_index()
+    registry.last_registration_summary = summary
+    registry.save(rebuild_artifacts=False, quiet=True)
+
+    print(f"✅ [Handle] Rule {rule.get('id')} registered in project state.\n")
+    return summary
 
 def _register_auto_secretion(registry, f_name):
     auto_rule = build_rule(

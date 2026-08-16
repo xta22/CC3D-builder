@@ -41,21 +41,6 @@ class SubcellularSteppable(SteppableBasePy):
             return
 
         self._initialize_registered_systems(mcs)
-
-        if self.engine is not None and self.engine.ordered_dispatch_enabled():
-            self._update_visualization_fields(mcs)
-            return
-
-        for cell in list(self.cell_list):
-            requests = cell.dict.setdefault("requests", {})
-            queue = requests.get("subcellular", [])
-            if not isinstance(queue, list) or not queue:
-                continue
-            try:
-                for request in list(queue):
-                    self.execute(cell, request, mcs)
-            finally:
-                requests["subcellular"] = []
         self._update_visualization_fields(mcs)
 
     def execute(self, cell, request, mcs):

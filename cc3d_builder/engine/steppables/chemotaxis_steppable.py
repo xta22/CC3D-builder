@@ -16,23 +16,11 @@ class ChemotaxisSteppable(SteppableBasePy):
             return
 
         for cell in self.cell_list:
-            requests = cell.dict.setdefault("requests", {})
-            request = None if self.engine is not None and self.engine.ordered_dispatch_enabled() else requests.get("chemotaxis")
             stats = cell.dict.get("behaviour_stats", {}).get("chemotaxis", {})
 
-            if not request:
-                # No new command means the previously written ChemotaxisData
-                # remains active until another rule explicitly overwrites it.
-                if stats.get("active") and cell.dict.get("_chemotaxis_executed_mcs") != mcs:
-                    record_active_step(cell, "chemotaxis", mcs)
-                continue
-
-            try:
-                self.execute(cell, request, mcs)
-            finally:
-                requests["chemotaxis"] = None
-
-            # ChemotaxisData itself remains active after this one-shot request is cleared.
+            # ChemotaxisData remains active until another rule overwrites it.
+            if stats.get("active") and cell.dict.get("_chemotaxis_executed_mcs") != mcs:
+                record_active_step(cell, "chemotaxis", mcs)
 
     def execute(self, cell, request, mcs):
         plugin = self.chemotaxisPlugin

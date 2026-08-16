@@ -15,23 +15,7 @@ class FPPLinkSteppable(SteppableBasePy):
             self.engine.register_executor("fpp_link", self)
 
     def step(self, mcs):
-        if self.cell_list is None:
-            return
-        if self.engine is not None and self.engine.ordered_dispatch_enabled():
-            return
-
-        for cell in list(self.cell_list):
-            requests = cell.dict.setdefault("requests", {})
-            queue = requests.get("fpp_link", [])
-            if not queue:
-                continue
-            try:
-                if cell.dict.get("is_dead"):
-                    continue
-                for request in list(queue):
-                    self.execute(cell, request, mcs)
-            finally:
-                requests["fpp_link"] = []
+        return
 
     def execute(self, cell, request, mcs):
         mode = str(request.get("mode", "nearest_type")).strip().lower()

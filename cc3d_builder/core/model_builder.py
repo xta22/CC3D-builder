@@ -1,6 +1,8 @@
 # model_builder.py
 def build_model():
-    print("Select model:")
+    print("Select field-regulated physical model:")
+    print("Regulators here are CC3D diffusion fields only (e.g., Oxygen, Lactate).")
+    print("Use State/native expression instead for {volume}, {division_count}, or custom state keys.")
     print("1 - hill")
     print("2 - linear")
     print("3 - expression")
@@ -8,7 +10,7 @@ def build_model():
     choice = input("Choice: ").strip()
 
     if choice == "1":
-        regulator = input("Regulator (field name or list separated by comma): ")
+        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
         regulators = [r.strip() for r in regulator.split(",") if r.strip()]
 
         y_max = float(input("y_max: "))
@@ -28,7 +30,7 @@ def build_model():
         }
 
     elif choice == "2":
-        regulator = input("Regulator fields (separated by comma, e.g., Oxygen, Lactate): ")
+        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
         regulators = [r.strip() for r in regulator.split(",") if r.strip()]
         
         alphas = []
@@ -49,10 +51,10 @@ def build_model():
         }
 
     elif choice == "3":
-        regulator = input("Regulator fields (separated by comma, e.g., Oxygen, Lactate): ")
+        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
         regulators = [r.strip() for r in regulator.split(",") if r.strip()]
         
-        expr = input("Expression (e.g., 0.02 * Oxygen - 0.01 * Lactate): ").strip()
+        expr = input("Expression using field variable names (e.g., 0.02 * Oxygen - 0.01 * Lactate): ").strip()
         return {
             "model": "expression",
             "regulator": regulators if len(regulators) > 1 else regulators[0],

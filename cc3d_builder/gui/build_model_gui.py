@@ -3,7 +3,14 @@ from PyQt5.QtWidgets import QInputDialog, QLineEdit, QVBoxLayout, QDialog, QDial
 
 def build_model_gui(behaviour, parent=None):
     models = ["hill", "linear", "expression"]
-    model_type, ok = QInputDialog.getItem(parent, "Select Model", "Choose model type:", models, 0, False)
+    model_type, ok = QInputDialog.getItem(
+        parent,
+        "Select Field-Regulated Model",
+        "Choose model type.\nRegulators here are CC3D diffusion fields only.\nUse State / Native Expression for {volume}, {division_count}, or custom state keys.",
+        models,
+        0,
+        False,
+    )
     
     if not ok: return None
 
@@ -18,7 +25,7 @@ def build_model_gui(behaviour, parent=None):
         k_input = QLineEdit("0.5")
         n_input = QLineEdit("2.0")
         
-        layout.addRow("Regulator(s):", reg_input)
+        layout.addRow("Regulator diffusion field(s):", reg_input)
         layout.addRow("y_max:", ymax_input)
         layout.addRow("y_min:", ymin_input)
         layout.addRow("K:", k_input)
@@ -43,14 +50,14 @@ def build_model_gui(behaviour, parent=None):
             }
 
     elif model_type == "linear":
-        reg, ok1 = QInputDialog.getText(parent, "Linear Model", "Regulator field:")
+        reg, ok1 = QInputDialog.getText(parent, "Linear Model", "Regulator diffusion field(s), comma-separated:")
         alpha, ok2 = QInputDialog.getDouble(parent, "Linear Model", "Alpha:", 0.1, -100, 100, 4)
         if ok1 and ok2:
             return {"model": "linear", "regulator": reg, "parameters": {"alpha": alpha}}
 
     elif model_type == "expression":
-        reg, ok1 = QInputDialog.getText(parent, "Expression Model", "Regulator field:")
-        expr, ok2 = QInputDialog.getText(parent, "Expression Model", "Expression (e.g. 0.02 * Oxygen):")
+        reg, ok1 = QInputDialog.getText(parent, "Expression Model", "Regulator diffusion field(s), comma-separated:")
+        expr, ok2 = QInputDialog.getText(parent, "Expression Model", "Expression using field names (e.g. 0.02 * Oxygen):")
         if ok1 and ok2:
             return {
                 "model": "expression", 

@@ -10,10 +10,10 @@ from cc3d_builder.engine.core.behaviour_stats import (
 
 class DormancySteppable(SteppableBasePy):
     """
-    Execute queued dormancy state-transition requests.
+    Execute dormancy state-transition requests and track persistent dormancy.
 
-    RuleEngine handles rule matching and DormancyPlugin queues requests. This
-    steppable only mutates cell state and clears the queue.
+    RuleEngine handles rule matching and calls execute directly. This steppable
+    mutates cell state and records continuing dormancy during step().
     """
 
     def __init__(self, frequency=1, engine=None):
@@ -27,26 +27,8 @@ class DormancySteppable(SteppableBasePy):
             return
 
         for cell in self.cell_list:
-            request_dict = cell.dict.setdefault("requests", {})
-            requests = request_dict.get("dormancy", [])
-
             if cell.dict.get("dormant", False) and cell.dict.get("_dormancy_executed_mcs") != mcs:
                 record_active_step(cell, "dormancy", mcs)
-
-            if self.engine is not None and self.engine.ordered_dispatch_enabled():
-                continue
-
-            if not requests:
-                continue
-
-            try:
-                if "dormant" not in cell.dict:
-                    cell.dict["dormant"] = False
-
-                for request in list(requests):
-                    self._execute_request(cell, request, mcs)
-            finally:
-                request_dict["dormancy"] = []
 
     def execute(self, cell, request, mcs):
         self._execute_request(cell, request, mcs)

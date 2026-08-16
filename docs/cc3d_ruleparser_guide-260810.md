@@ -129,7 +129,7 @@ A behavior names the biological or physical action to perform, such as `growth`,
 
 ### Plugin
 
-A behavior plugin converts a matched case into a queued execution request.
+A behavior plugin converts a matched case into an execution request returned directly to the rule engine.
 
 ### Steppable Executor
 
@@ -173,7 +173,8 @@ A quick reminder - The runtime path and generated-code path are separate:
 
 ```text
 cc3d_builder/
-  main.py                         CLI entry point
+  cli/
+    main.py                       CLI entry point
   core/
     project_manager.py            Source project import/resume and wrapper generation
     project_profile.py            .ruleparser project profile persistence
@@ -231,7 +232,7 @@ python3 -m cc3d_builder.gui.project_loader
 CLI entry point:
 
 ```bash
-python3 -m cc3d_builder.main
+python3 -m cc3d_builder.cli.main
 ```
 
 The loader asks whether to:
@@ -511,7 +512,7 @@ The engine resolves supported state keys from native cell attributes, `cell.dict
 The state key catalog can be printed from CLI:
 
 ```bash
-python3 -m cc3d_builder.main --state-keys
+python3 -m cc3d_builder.cli.main --state-keys
 ```
 
 ## 10. Behavior Coverage
@@ -1035,8 +1036,8 @@ RuleParser supports intracellular regulatory models through SBML, Antimony, Cell
 
 ```bash
 python3 -m cc3d_builder.gui.project_loader
-python3 -m cc3d_builder.main
-python3 -m cc3d_builder.main --state-keys
+python3 -m cc3d_builder.cli.main
+python3 -m cc3d_builder.cli.main --state-keys
 ```
 
 ### Main Runtime Files
@@ -1079,7 +1080,7 @@ docs/subcellular_systems.md
 | condition | Predicate determining whether a case applies. |
 | behavior | Biological or physical action type. |
 | plugin | Runtime object that converts a matched case into a request. |
-| steppable executor | CC3D steppable that performs the queued action. |
+| steppable executor | CC3D steppable that performs the matched action request. |
 | generated code | Self-contained CC3D steppable generated from the current registry. |
 | intracellular model | SBML/Antimony/CellML/MaBoSS model attached to CC3D cells. |
 | subcellular system | Coarse-grained internal state dictionary stored inside each cell. |

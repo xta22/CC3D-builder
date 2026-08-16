@@ -28,14 +28,8 @@ class DeathSteppable(SteppableBasePy):
         field = self.field.DeathStatus
 
         for cell in self.cell_list:
-            requests = cell.dict.setdefault("requests", {})
-            req = None if self.engine is not None and self.engine.ordered_dispatch_enabled() else requests.get("death_init")
-
-            if req:
-                self._start_death_program(cell, req, field, mcs)
-
             if cell.dict.get("is_dead"):
-                self._clear_non_death_requests(cell)
+                self._clear_non_death_state(cell)
 
             # ========================================================
             # Continuous state of dead cells.
@@ -105,7 +99,6 @@ class DeathSteppable(SteppableBasePy):
             field[cell] = 2.0
         else:
             print(f"[DeathSteppable] Unknown death mode: {mode}")
-            cell.dict["requests"]["death_init"] = None
             return
 
         cell.dict["is_dead"] = True
@@ -114,21 +107,12 @@ class DeathSteppable(SteppableBasePy):
         record_activation(cell, "death", mcs)
         set_metric(cell, "death", "mode", mode)
         set_metric(cell, "death", "state", cell.dict["death_state"])
-        cell.dict["requests"]["death_init"] = None
-        self._clear_non_death_requests(cell)
+        self._clear_non_death_state(cell)
 
         if req.get("debug"):
             print(f"[DeathSteppable] Cell {cell.id} entered {mode} program")
 
-    def _clear_non_death_requests(self, cell):
-        requests = cell.dict.setdefault("requests", {})
-
-        for key in ("type_switch", "division", "chemotaxis", "force"):
-            requests[key] = None
-
-        for key in ("growth", "secretion", "dormancy", "phagocytosis", "compartmentalize", "fpp_link", "intracellular_model", "subcellular"):
-            requests[key] = []
-
+    def _clear_non_death_state(self, cell):
         cell.dict.pop("active_force", None)
 
     def _release_field(self, cell, field_info):

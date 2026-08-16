@@ -13,17 +13,7 @@ class CreateSteppable(SteppableBasePy):
             self.engine.register_executor("create", self)
 
     def step(self, mcs):
-        if self.engine is None:
-            return
-        if self.engine.ordered_dispatch_enabled():
-            return
-
-        queue = self.engine.create_queue
-
-        for req in queue:
-            self._execute_create(req, mcs)
-
-        self.engine.create_queue = []
+        return
 
     def execute(self, cell, req, mcs):
         self._execute_create(req, mcs)

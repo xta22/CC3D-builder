@@ -1,0 +1,4 @@
+id,order,behaviour,target,mode,new_type,parent_type,child_type,volume_ratio,mode_param,placement_type,angle_deg,dx,dy,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug
+DIFF_SWITCH,1,differentiate,CellA,type_switch,CellB,,,,,,,,,threshold,,,,Environment,Oxygen,<,0.2,,,,1,FALSE,FALSE
+DIV_RANDOM,2,differentiate,CellA,division,,CellA,CellA,0.5,total,random,,,,time_window,,100,300,,,,,,,,1,FALSE,TRUE
+DIV_DYNAMIC_RATIO,3,differentiate,CellB,division,,CellB,CellA,"{""model"":""linear"",""regulator"":""Nutrient"",""parameters"":{""alpha"":0.5}}",reset,vector,,1,0,state,,,,State,division_count,<,3,,,,5,FALSE,TRUE

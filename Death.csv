@@ -1,0 +1,4 @@
+id,order,behaviour,target,mode,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,frequency,once,debug,shrink_rate,terminal_volume,swell_rate,max_target_volume,post_burst_shrink_rate,release_fields,color_change
+DEATH_APOP,1,death,TumorCell,apoptosis,time_window,,500,800,,,,,,,,1,FALSE,TRUE,0.95,0.0,,,,,grey
+DEATH_DYNAMIC_APOP,2,death,TumorCell,apoptosis,threshold,,,,Environment,DamageFactor,>,0.2,radius_max,5,,1,FALSE,TRUE,"{""model"":""linear"",""regulator"":""DamageFactor"",""parameters"":{""alpha"":0.1}}",0.0,,,,,grey
+DEATH_NECROSIS,3,death,NormalCell,necrosis,threshold,,,,Environment,Oxygen,<,0.2,,,,1,FALSE,FALSE,,,1.05,150,0.8,Oxygen:50;Glucose:10,grey
