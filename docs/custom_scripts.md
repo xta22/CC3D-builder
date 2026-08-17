@@ -15,7 +15,7 @@ Rules_project/Simulation/custom_scripts/
 Template:
 
 ```text
-cc3d_builder/condition_template/custom_condition_template.py
+cc3d_builder/template/custom_condition_template.py
 ```
 
 Rule shape:
@@ -128,7 +128,7 @@ Rules_project/Simulation/custom_scripts/
 Template:
 
 ```text
-cc3d_builder/condition_template/custom_rule_script_template.py
+cc3d_builder/template/custom_rule_script_template.py
 ```
 
 Rule shape:
@@ -232,12 +232,33 @@ Use it as a `custom_script` rule:
 
 In this example, the script owns the action. It does not call a built-in behaviour. Because the script contains literal `params.get("target_type")`, `params.get("state_key")`, and `params.get("value")`, the full custom-rule GUI can expose those fields as editable parameters.
 
+## Runtime Helpers
+
+Custom scripts can use helper methods exposed by both the runtime engine and generated-code runtime.
+
+Common helpers:
+
+```python
+engine.resolve_numeric(value, cell=None, default=0.0)
+engine.get_field_value(field_name, cell)
+engine.get_contact_ratio(cell, target_type_name)
+engine.target_cells(target_type_name_or_all)
+engine.ensure_cell_state(cell)
+engine.available_helpers()
+```
+
+In a condition-only script, the runtime object is named `engine`.
+
+In a full custom rule script, the runtime object is named `context`.
+
+`params.get("key", default)` reads a value from the rule's parameter dictionary. It does not automatically create or register the key. For full custom rule scripts, literal `params.get("...")` calls can be scanned by the GUI and exposed as editable parameters. Condition-only script parameters are entered in the condition parameter block.
+
 ## Architecture Placement
 
 Templates live in:
 
 ```text
-cc3d_builder/condition_template/
+cc3d_builder/template/
 ```
 
 Project-specific scripts should not be edited inside the template directory. Copy a template into the sandbox or source project, then reference the copied file from `rules.json`.

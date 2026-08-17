@@ -21,8 +21,11 @@ def _print_registration_report(rule, registration_summary, artifact_summary, san
     print(f"Steppable volume init synced: {'yes' if artifact_summary.get('volume_markers_synced') else 'no'}")
     print(f"Generated code: {'yes' if artifact_summary.get('code_generated') else 'no'}")
     print(f"Project profile synced: {'yes' if artifact_summary.get('profile_synced') else 'no'}")
+    print(f"Source project artifacts synced: {'yes' if artifact_summary.get('source_artifacts_synced') else 'no'}")
     if artifact_summary.get("generator_error"):
         print(f"Generator error: {artifact_summary['generator_error']}")
+    if artifact_summary.get("source_artifact_error"):
+        print(f"Source artifact sync error: {artifact_summary['source_artifact_error']}")
     print(f"Modified files are at: {sandbox_dir}")
 
 
@@ -33,8 +36,11 @@ def _print_artifact_report(title, artifact_summary, sandbox_dir):
     print(f"Steppable volume init synced: {'yes' if artifact_summary.get('volume_markers_synced') else 'no'}")
     print(f"Generated code: {'yes' if artifact_summary.get('code_generated') else 'no'}")
     print(f"Project profile synced: {'yes' if artifact_summary.get('profile_synced') else 'no'}")
+    print(f"Source project artifacts synced: {'yes' if artifact_summary.get('source_artifacts_synced') else 'no'}")
     if artifact_summary.get("generator_error"):
         print(f"Generator error: {artifact_summary['generator_error']}")
+    if artifact_summary.get("source_artifact_error"):
+        print(f"Source artifact sync error: {artifact_summary['source_artifact_error']}")
     print(f"Modified files are at: {sandbox_dir}")
 
 

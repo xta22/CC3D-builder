@@ -1,6 +1,6 @@
 # Generated CC3D Code Index
 
-This document indexes the structure of `SimulationStepCode.py`. It is not a replacement for `rules.json`; it is a map for code-level customization after the generated steppable is copied into Twedit.
+This document indexes the structure of `SimulationStepCode.py`. It is not a replacement for `rules.json`; it is a map for code-level customization after the generated steppable is built.
 
 ## Generated File Location
 
@@ -10,7 +10,9 @@ The registry currently writes generated native CC3D code to:
 Rules_project/Simulation/SimulationStepCode.py
 ```
 
-This file is a complete traditional CC3D steppable file. It can be copied into the target CC3D project as `Simulation/<ProjectName>Steppables.py`.
+This file is a complete traditional CC3D steppable file. In the current generated-code workflow, the source project `.cc3d` points to `Simulation/gen_code_main.py`, and `gen_code_main.py` registers `SimulationStepCode.SimulationSteppable`.
+
+Manual copying into Twedit is still possible for one-off experiments, but it is not the default project-sync path.
 
 ## Runtime Model
 
@@ -197,7 +199,19 @@ These functions control event scheduling and dispatch. They are usually not call
 
 ## Generated Data Recording
 
-The generated steppable records simulation data into `Rules_project/simulation_time_series/` when it runs as standalone CC3D code.
+The generated steppable records simulation data into `simulation_time_series/` under the CC3D project that is currently running.
+
+For example, if CompuCell Player opens:
+
+```text
+/Users/xiaoyue/Desktop/ProjectA/Rules_project.cc3d
+```
+
+the output directory is:
+
+```text
+/Users/xiaoyue/Desktop/ProjectA/simulation_time_series/
+```
 
 Main output files:
 
@@ -212,6 +226,7 @@ Key functions:
 | --- | --- |
 | `_configure_audit_output_dir()` | Resolves and creates the `simulation_time_series` output directory |
 | `_audit_interval_matches(mcs)` | Checks `settings["audit_interval"]` |
+| `_audit_cell_sequence_limit()` | Reads `settings["audit_cell_sequence_limit"]` |
 | `_flatten_cell_dict(mapping)` | Converts nested `cell.dict` values into flat CSV columns |
 | `_audit_value(value)` | Converts non-scalar values into CSV-safe values |
 | `_audit_all_cells(mcs)` | Captures one row per cell for the current MCS |
@@ -239,6 +254,16 @@ def _audit_all_cells(self, mcs):
 ```
 
 Because `cell.dict` is flattened, user-defined state keys, intracellular caches, subcellular state, behavior statistics, and hook-written values are all captured if they exist at the audited MCS.
+
+`audit_cell_sequence_limit` controls per-cell sequence export:
+
+```text
+3       export first 3 observed cell IDs
+0       do not export per-cell sequence files
+"all"   export every observed cell ID
+```
+
+`"all"` means all cell IDs that appeared in the audit buffer. If a cell is deleted during the simulation, its sequence contains the rows recorded while it existed.
 
 ## Condition Helpers
 

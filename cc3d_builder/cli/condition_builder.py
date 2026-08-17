@@ -1,5 +1,6 @@
 # condition_builder.py
 from cc3d_builder.core.dynamic_numeric import parse_dynamic_numeric
+from cc3d_builder.utils_extensions.utils import collect_custom_params_cli
 
 
 ENVIRONMENT_SAMPLING_MODES = {
@@ -378,25 +379,11 @@ def build_condition(registry=None):
     # =========================
     elif choice == "8":
         script_path = input("Enter script path (e.g. custom/my_logic.py): ").strip()
-        
-        raw_params = input("Enter params (e.g. target_type=ImmuneCell, count=5) [Leave blank if none]: ").strip()
-        
-        custom_params = {}
-        if raw_params:
-            for pair in raw_params.split(","):
-                if "=" in pair:
-                    k, v = pair.split("=", 1)
-                    k = k.strip()
-                    v = v.strip()
-                    try:
-                        if "." in v:
-                            v = float(v)
-                        else:
-                            v = int(v)
-                    except ValueError:
-                        pass 
-                    
-                    custom_params[k] = v
+        try:
+            custom_params = collect_custom_params_cli(script_path, existing_params={})
+        except Exception as exc:
+            print(f"Could not scan custom condition parameters: {exc}")
+            custom_params = {}
 
         return {
             "condition_type": "Custom",

@@ -708,6 +708,69 @@ class StructureManager:
         return "" if not text or text.lower() == "nan" else text
 
     @staticmethod
+    def _split_initializer_types(raw_types):
+        return [item.strip() for item in str(raw_types or "").split(",") if item.strip()]
+
+    @staticmethod
+    def _is_region_initializer_steppable(steppable):
+        if steppable.tag != "Steppable":
+            return False
+        kind = f"{steppable.get('Type', '')} {steppable.get('Name', '')}".lower()
+        if "initializer" not in kind:
+            return False
+        return steppable.get("Type") == "UniformInitializer" or bool(steppable.findall("Region"))
+
+    def _region_initializer_steppables(self):
+        return [
+            steppable
+            for steppable in self.root.findall(".//Steppable")
+            if self._is_region_initializer_steppable(steppable)
+        ]
+
+    def _initializer_has_type(self, name):
+        clean_name = self._clean_type_name(name)
+        if not clean_name:
+            return False
+        for initializer in self._region_initializer_steppables():
+            for region in initializer.findall("Region"):
+                if clean_name in self._split_initializer_types(region.findtext("Types", "")):
+                    return True
+        return False
+
+    def initializer_summary_by_type(self):
+        summary = {}
+        for initializer in self._region_initializer_steppables():
+            for region in initializer.findall("Region"):
+                types = self._split_initializer_types(region.findtext("Types", ""))
+                if not types:
+                    continue
+                count = self._estimate_initializer_region_cells(region)
+                for cell_type in types:
+                    entry = summary.setdefault(cell_type, {"regions": 0, "cells": 0, "unknown": False})
+                    entry["regions"] += 1
+                    if count is None:
+                        entry["unknown"] = True
+                    else:
+                        entry["cells"] += max(1, count // len(types))
+        return summary
+
+    def _estimate_initializer_region_cells(self, region):
+        box_min = region.find("BoxMin")
+        box_max = region.find("BoxMax")
+        if box_min is None or box_max is None:
+            return None
+        try:
+            width = max(1, int(float(region.findtext("Width", "1"))))
+            gap = max(0, int(float(region.findtext("Gap", "0"))))
+            pitch = max(1, width + gap)
+            dx = max(0, int(float(box_max.get("x", 0))) - int(float(box_min.get("x", 0))))
+            dy = max(0, int(float(box_max.get("y", 0))) - int(float(box_min.get("y", 0))))
+            dz = max(1, int(float(box_max.get("z", 1))) - int(float(box_min.get("z", 0))))
+        except (TypeError, ValueError):
+            return None
+        return max(1, dx // pitch) * max(1, dy // pitch) * max(1, dz)
+
+    @staticmethod
     def _safe_float(value, default):
         try:
             return float(value)
@@ -887,13 +950,16 @@ class StructureManager:
                     volume_plugin.remove(param)
                     removed = True
 
-        initializer = self.root.find(".//Steppable[@Type='UniformInitializer']")
-        if initializer is not None:
+        for initializer in self._region_initializer_steppables():
             for region in list(initializer.findall("Region")):
                 types_node = region.find("Types")
-                types = [part.strip() for part in (types_node.text or "").split(",")] if types_node is not None else []
+                types = self._split_initializer_types(types_node.text if types_node is not None else "")
                 if name in types:
-                    initializer.remove(region)
+                    remaining = [cell_type for cell_type in types if cell_type != name]
+                    if remaining and types_node is not None:
+                        types_node.text = ",".join(remaining)
+                    else:
+                        initializer.remove(region)
                     removed = True
 
         chem_plugin = self.root.find(".//Plugin[@Name='Chemotaxis']")
@@ -1120,11 +1186,20 @@ class StructureManager:
     # INITIALIZER
     # ============================================================
 
-    def _ensure_initializer(self, name):
+    def ensure_initializer_region(self, name, count=5):
+        return self._ensure_initializer(name, count=count)
+
+    def _ensure_initializer(self, name, count=5):
+        clean_name = self._clean_type_name(name)
+        if not clean_name or clean_name.lower() == "medium":
+            return False
+
+        if self._initializer_has_type(clean_name):
+            return False
 
         init = self.root.find(".//Steppable[@Type='UniformInitializer']")
         if init is None:
-            return
+            init = ET.SubElement(self.root, "Steppable", {"Type": "UniformInitializer"})
 
         potts = self.root.find(".//Potts")
         if potts is not None:
@@ -1140,12 +1215,19 @@ class StructureManager:
         
         PATCH_SIZE = 5
         MARGIN = 5
+        try:
+            current_count = max(1, int(float(count)))
+        except (TypeError, ValueError):
+            current_count = 5
+        side_length = int((current_count ** 0.5) * PATCH_SIZE) + 2
 
-        x_min = random.randint(MARGIN, max_x - PATCH_SIZE - MARGIN)
-        y_min = random.randint(MARGIN, max_y - PATCH_SIZE - MARGIN)
+        x_high = max(MARGIN, max_x - side_length - MARGIN)
+        y_high = max(MARGIN, max_y - side_length - MARGIN)
+        x_min = random.randint(MARGIN, x_high)
+        y_min = random.randint(MARGIN, y_high)
 
-        x_max = x_min + PATCH_SIZE
-        y_max = y_min + PATCH_SIZE
+        x_max = x_min + side_length
+        y_max = y_min + side_length
 
         region = ET.SubElement(init, "Region")
 
@@ -1163,7 +1245,8 @@ class StructureManager:
         ET.SubElement(region, "Width").text = str(PATCH_SIZE)
 
         types = ET.SubElement(region, "Types")
-        types.text = name
+        types.text = clean_name
+        return True
 
     # ============================================================
     # SAVE to XML
@@ -1225,19 +1308,39 @@ class StructureManager:
         return old_volumes
 
     def update_initializers(self, active_cells_config, layout_regions=None):
-        initializer = self.root.find(".//Steppable[@Type='UniformInitializer']")
+        initializer_parent = None
+        initializer = None
+        for parent in self.root.iter():
+            for child in list(parent):
+                if child.tag == "Steppable" and child.get("Type") == "UniformInitializer":
+                    initializer_parent = parent
+                    initializer = child
+                    break
+            if initializer is not None:
+                break
+
+        if layout_regions is not None:
+            if not layout_regions:
+                if initializer is not None and initializer_parent is not None:
+                    initializer_parent.remove(initializer)
+                self._indent(self.root)
+                return
+            if initializer is None:
+                initializer = ET.SubElement(self.root, "Steppable", {"Type": "UniformInitializer"})
+            else:
+                for region in list(initializer.findall("Region")):
+                    initializer.remove(region)
+            for layout_region in layout_regions:
+                self._add_initializer_region(initializer, layout_region)
+            self._indent(self.root)
+            return
+
         if initializer is None:
             initializer = ET.SubElement(self.root, "Steppable", {"Type": "UniformInitializer"})
         else:
             # clear the old, unticked cell types
             for region in list(initializer.findall("Region")):
                 initializer.remove(region)
-
-        if layout_regions:
-            for layout_region in layout_regions:
-                self._add_initializer_region(initializer, layout_region)
-            self._indent(self.root)
-            return
 
         # retrieve the map size
         potts = self.root.find(".//Potts")

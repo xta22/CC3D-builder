@@ -147,13 +147,13 @@ Localization:
 Subsystem registry CSV files are imported from the Subcellular Systems dialog.
 
 ```text
-docs/subcellular_system_registry_example.csv
+cc3d_builder/template/subcellular_system_registry_template.csv
 ```
 
 Ordered rule CSV files use the normal Import Rules CSV button. Use behaviour `subcellular`.
 
 ```text
-docs/subcellular_rules_example.csv
+cc3d_builder/template/subcellular_rules_template.csv
 ```
 
 ## Generated Code

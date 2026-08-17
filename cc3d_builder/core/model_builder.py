@@ -1,4 +1,17 @@
 # model_builder.py
+def _ask_regulators():
+    while True:
+        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
+        regulators = [
+            r.strip()
+            for r in regulator.split(",")
+            if r.strip() and r.strip().lower() not in {"none", "null", "nan"}
+        ]
+        if regulators:
+            return regulators
+        print("At least one diffusion field regulator is required for field-regulated physical models.")
+
+
 def build_model():
     print("Select field-regulated physical model:")
     print("Regulators here are CC3D diffusion fields only (e.g., Oxygen, Lactate).")
@@ -10,8 +23,7 @@ def build_model():
     choice = input("Choice: ").strip()
 
     if choice == "1":
-        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
-        regulators = [r.strip() for r in regulator.split(",") if r.strip()]
+        regulators = _ask_regulators()
 
         y_max = float(input("y_max: "))
         y_min = float(input("y_min: "))
@@ -30,8 +42,7 @@ def build_model():
         }
 
     elif choice == "2":
-        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
-        regulators = [r.strip() for r in regulator.split(",") if r.strip()]
+        regulators = _ask_regulators()
         
         alphas = []
         if len(regulators) > 1:
@@ -51,8 +62,7 @@ def build_model():
         }
 
     elif choice == "3":
-        regulator = input("Regulator diffusion field(s), comma-separated (e.g., Oxygen, Lactate): ")
-        regulators = [r.strip() for r in regulator.split(",") if r.strip()]
+        regulators = _ask_regulators()
         
         expr = input("Expression using field variable names (e.g., 0.02 * Oxygen - 0.01 * Lactate): ").strip()
         return {

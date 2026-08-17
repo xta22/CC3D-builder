@@ -1,6 +1,9 @@
 # build_condition_gui.py
-from PyQt5.QtWidgets import QInputDialog, QMessageBox
+from pathlib import Path
+
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 from cc3d_builder.core.dynamic_numeric import parse_dynamic_numeric
+from cc3d_builder.utils_extensions.utils import collect_custom_params_gui
 
 
 ENVIRONMENT_SAMPLING_CHOICES = [
@@ -113,40 +116,26 @@ def build_condition_gui(self):
     # 1. Custom Script 
     # =========================
     elif cond_type == "Custom Script":
-        script_name, ok = QInputDialog.getText(
-            self, "Custom Script", 
-            "Enter script path (e.g. custom/my_logic.py):"
+        script_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Custom Condition Script",
+            "",
+            "Python Files (*.py)",
         )
-        if not ok or not script_name.strip(): 
+        if not script_name:
             return None
 
-        raw_params, ok = QInputDialog.getText(
-            self, "Custom Parameters", 
-            "Enter params (e.g. target_type=ImmuneCell, max_count=5)\nLeave blank if none:"
-        )
-        if not ok: 
+        try:
+            custom_params = collect_custom_params_gui(script_name, existing_params={})
+        except Exception as exc:
+            QMessageBox.warning(self, "Custom Condition", f"Could not scan script parameters:\n{exc}")
             return None
-
-        custom_params = {}
-        if raw_params.strip():
-            for pair in raw_params.split(","):
-                if "=" in pair:
-                    k, v = pair.split("=", 1)
-                    k = k.strip()
-                    v = v.strip()
-                    try:
-                        if "." in v:
-                            v = float(v)
-                        else:
-                            v = int(v)
-                    except ValueError:
-                        pass
-                    
-                    custom_params[k] = v
+        if custom_params is None:
+            return None
 
         return {
             "condition_type": "Custom",
-            "script_path": script_name.strip(),
+            "script_path": Path(script_name).expanduser().as_posix(),
             "params": custom_params
         }
 

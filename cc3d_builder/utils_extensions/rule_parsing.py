@@ -1,5 +1,6 @@
 # rule_parsing.py
 # cc3d_builder/utils_extensions/rule_parsing.py
+import ast
 import re
 import pandas as pd
 from cc3d_builder.core.rule_schema import case_payload
@@ -117,11 +118,94 @@ def extract_celltypes_from_rule(rule):
     return {t for t in valid_types if t.lower() not in system_keywords}
 
 
+def _literal_value(node, default=""):
+    try:
+        return ast.literal_eval(node)
+    except Exception:
+        return default
+
+
+def _params_get_key_and_default(call):
+    if not isinstance(call, ast.Call):
+        return None, None
+    func = call.func
+    if not (
+        isinstance(func, ast.Attribute)
+        and func.attr == "get"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "params"
+        and call.args
+    ):
+        return None, None
+
+    key = _literal_value(call.args[0], None)
+    if not isinstance(key, str) or not key:
+        return None, None
+    default = _literal_value(call.args[1], "") if len(call.args) > 1 else ""
+    return key, default
+
+
+def _params_subscript_key(node):
+    if not isinstance(node, ast.Subscript):
+        return None
+    if not isinstance(node.value, ast.Name) or node.value.id != "params":
+        return None
+    key = _literal_value(node.slice, None)
+    return key if isinstance(key, str) and key else None
+
+
+def extract_param_defaults(content):
+    """
+    Return detected custom-script params as {key: default}.
+
+    This intentionally parses Python AST instead of regex so docstrings such as
+    params.get(<key>) are not treated as real GUI/CLI parameters. Supported
+    declaration patterns include:
+
+        params.get("threshold", 0.5)
+        params.get("field_name") or "Oxygen"
+        context.resolve_numeric(params.get("amount", "{volume} * 0.01"), ...)
+        params["state_key"]
+    """
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        pattern = r"params(?:\[['\"]|\.get\(['\"])(.+?)(?:['\"][, \)]|['\"]\])"
+        matches = re.findall(pattern, content)
+        return {m: "" for m in sorted(set(matches)) if m != "get"}
+
+    detected = {}
+
+    class Visitor(ast.NodeVisitor):
+        def visit_Call(self, node):
+            key, default = _params_get_key_and_default(node)
+            if key:
+                detected.setdefault(key, default)
+            self.generic_visit(node)
+
+        def visit_Subscript(self, node):
+            key = _params_subscript_key(node)
+            if key:
+                detected.setdefault(key, "")
+            self.generic_visit(node)
+
+        def visit_BoolOp(self, node):
+            if isinstance(node.op, ast.Or) and len(node.values) >= 2:
+                first = node.values[0]
+                key, default = _params_get_key_and_default(first)
+                if key and default == "":
+                    fallback = _literal_value(node.values[1], "")
+                    detected[key] = fallback
+            self.generic_visit(node)
+
+    Visitor().visit(tree)
+    return {key: detected[key] for key in sorted(detected)}
+
+
 def extract_params(content):
-    pattern = r"params(?:\[['\"]|\.get\(['\"])(.+?)(?:['\"][, \)]|['\"]\])"
-    matches = re.findall(pattern, content)
-    unique_params = sorted(list(set(m for m in matches if m != 'get')))
-    print(f">>> DEBUG: Regex extracted: {unique_params}")
+    specs = extract_param_defaults(content)
+    unique_params = sorted(specs)
+    print(f">>> DEBUG: AST extracted: {unique_params}")
     return unique_params
 
   

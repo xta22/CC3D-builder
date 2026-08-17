@@ -2,6 +2,19 @@
 
 import math
 
+
+def _normalize_regulators(regulator):
+    if regulator is None:
+        return []
+    raw = regulator if isinstance(regulator, list) else [regulator]
+    regulators = []
+    for item in raw:
+        text = str(item).strip()
+        if not text or text.lower() in {"none", "null", "nan"}:
+            continue
+        regulators.append(text)
+    return regulators
+
 def get_local_fields(cell, engine):
     local_vars = {}
     # loop through engine.field (self.field in cc3d)
@@ -23,16 +36,16 @@ def linear_model(request, cell, engine):
     regulator_name = request.get("regulator")
     alpha = request.get("alpha", 1.0)
 
-    if not regulator_name:
+    regulators = _normalize_regulators(regulator_name)
+    if not regulators:
         return 0.0
 
-    regulators = regulator_name if isinstance(regulator_name, list) else [regulator_name]
     alphas = alpha if isinstance(alpha, list) else [alpha] * len(regulators)
 
     try:
         total = 0.0
         for reg, coef in zip(regulators, alphas):
-            field = getattr(engine.field, reg, None)
+            field = getattr(engine.field, str(reg), None)
             if field is not None:
                 val = field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)]
                 total += float(coef) * float(val)
@@ -46,10 +59,9 @@ def linear_model(request, cell, engine):
 # ================================
 def hill_model(request, cell, engine):
     regulators = request.get("regulator")
+    regulators = _normalize_regulators(regulators)
     if not regulators:
         return 0.0
-    if not isinstance(regulators, list):
-        regulators = [regulators]
 
     y_max = request.get("y_max", 1.0)
     y_min = request.get("y_min", 0.0)

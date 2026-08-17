@@ -6,3 +6,5 @@ PyQt5_sip==12.18.0
 python-dateutil==2.9.0.post0
 six==1.17.0
 pandas==3.0.1
+
+# For Windows users, we recommend using PyQt 5.15.9 and PyQt5-Qt5 5.15.2.

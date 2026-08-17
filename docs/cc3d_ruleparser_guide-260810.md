@@ -27,7 +27,7 @@ This guide is written as a brochure-style overview, offering a practical develop
 - A GUI and CLI for constructing and editing rules.
 - A runtime rule engine that evaluates conditions and dispatches actions through behavior plugins and steppables.
 - Automatic synchronization of cell types, fields, contact energies, FPP dependencies, and generated Python code.
-- A native CC3D code generator that exports a self-contained `SimulationStepCode.py` for use in Twedit without the runtime rule engine.
+- A native CC3D code generator that exports a self-contained `SimulationStepCode.py` and `gen_code_main.py` for running a source project without the runtime rule engine.
 - Time-series audit output for cell states, behavior metrics, intracellular variables, and subcellular states.
 - Bulk import rules from CSV files. You're free to manage the rules using any table management tool you like, apart from RuleParser.
 The core idea is simple:
@@ -240,7 +240,7 @@ The loader asks whether to:
 - import new and clear RuleParser rules
 - resume project rules from `.ruleparser/rules.json`
 
-Certain special features beyond rule import—such as rule order management, partial modifications, XML config editor, intracellular model registry, and subcellular system registry. No CLI entries are provided for these. Please use the GUI if you need access to them.
+The GUI remains the richer editing surface for table editing, XML views, and visual project management. The CLI supports the main project load/save, rule import, intracellular model registry, subcellular system registry, and rule construction workflows.
 
 ### 6.3 Configure XML
 
@@ -286,22 +286,25 @@ Saving through the registry performs several operations:
 4. Ensures XML field definitions from `field_params`.
 5. Ensures required XML plugins and steppables for rule dependencies.
 6. Recompiles `Rules_project/Simulation/SimulationStepCode.py`.
+7. Syncs generated artifacts back to the active source project when a synced project profile is active.
 
 ### 6.7 Run In CC3D
 
-Run the sandbox project:
+Run the active source project or the sandbox project.
 
 ```text
 /path/to/CompuCell3D/compucell3d.command -i /path/to/RuleParser/Rules_project/Rules_project.cc3d
 ```
 
-The `.cc3d` file uses:
+For a source project synchronized to generated-code mode, the `.cc3d` file uses:
 
 ```text
-Simulation/wrapper_main.py
+Simulation/gen_code_main.py
 ```
 
-The wrapper registers the original project steppable, the rule engine, behavior steppables, and optional intracellular/subcellular steppables depending on the current configuration.
+`gen_code_main.py` registers `SimulationStepCode.SimulationSteppable`, so CompuCell Player runs the generated-code path directly.
+
+The older runtime-engine path uses `Simulation/wrapper_main.py`. That wrapper registers the original project steppable, the rule engine, behavior steppables, and optional intracellular/subcellular steppables.
 
 ## 7. rules.json Anatomy
 
@@ -425,10 +428,11 @@ Dynamic example:
 
   global rule + once: true
     rule_3 triggers once -> rule_3 is disabled globally
+  ```
 
 ## 8. Execution Semantics
 
-RuleParser supports three execution modes:
+RuleParser supports two execution modes:
 
 | mode | meaning |
 | --- | --- |
@@ -710,7 +714,7 @@ The runtime can create scalar fields for stage, activity, component counts, and 
 
 ## 11. CSV Import
 
-CSV import supports batch rule construction. Template examples are provided at the repository root:
+CSV import supports batch rule construction. Behaviour templates may be kept at the repository root for quick editing, and model/system templates are stored in `cc3d_builder/template/`.
 
 - `Growth.csv`
 - `Differentiate.csv`
@@ -724,11 +728,12 @@ CSV import supports batch rule construction. Template examples are provided at t
 - `FPPLink.csv`
 - `Compartmentalize.csv`
 
-Registry CSV examples:
+Registry CSV templates:
 
-- `docs/intracellular_model_registry_example.csv`
-- `docs/subcellular_system_registry_example.csv`
-- `docs/subcellular_rules_example.csv`
+- `cc3d_builder/template/intracellular_model_registry_template.csv`
+- `cc3d_builder/template/intracellular_model_rules_template.csv`
+- `cc3d_builder/template/subcellular_system_registry_template.csv`
+- `cc3d_builder/template/subcellular_rules_template.csv`
 
 CSV import is best for structured, repeated rules. Complex nested conditions, custom scripts, or heavily nested mappings are easier to inspect and maintain through GUI or direct JSON.
 
@@ -793,9 +798,9 @@ At each MCS, `RuleEngineSteppable.step(mcs)` performs:
 4. Evaluate rule cases.
 5. Build events for matching cases.
 6. Dispatch each event through the behavior plugin.
-7. Pop the resulting request.
-8. Execute it through the behavior steppable.
-9. Update behavior stats and state caches.
+7. Convert the matched case into an execution request.
+8. Execute it through the behaviour steppable.
+9. Update behaviour stats and state caches.
 10. Audit cell state if `audit_interval` matches.
 11. Write live audit CSV if `audit_export_interval` matches.
 
@@ -819,8 +824,10 @@ The runtime audit captures:
 Output directory:
 
 ```text
-Rules_project/simulation_time_series/
+<RunningProject>/simulation_time_series/
 ```
+
+If CompuCell Player opens `/Users/xiaoyue/Desktop/ProjectA/Rules_project.cc3d`, the generated-code runtime writes audit files under `/Users/xiaoyue/Desktop/ProjectA/simulation_time_series/`.
 
 Main file:
 
@@ -843,6 +850,8 @@ Settings:
   "audit_cell_sequence_limit": 3
 }
 ```
+
+For generated-code output, `audit_cell_sequence_limit` may also be `0` to skip per-cell sequence files or `"all"` to export every observed cell id.
 
 Key modules:
 
@@ -892,9 +901,10 @@ The registry generates:
 
 ```text
 Rules_project/Simulation/SimulationStepCode.py
+Rules_project/Simulation/gen_code_main.py
 ```
 
-This file is intended for copying into a traditional CC3D project or editing in Twedit. It is independent of the runtime rule engine.
+`SimulationStepCode.py` is independent of the runtime rule engine. In the current synchronized source-project workflow, the source `.cc3d` points to `Simulation/gen_code_main.py`, which registers the generated steppable. Manual copying into Twedit remains useful for one-off experiments, but it is not the default sync path.
 
 Generated code embeds:
 
@@ -951,7 +961,7 @@ RuleParser has two custom script scopes:
 Copyable templates are stored in:
 
 ```text
-cc3d_builder/condition_template/
+cc3d_builder/template/
 ```
 
 Project-specific scripts should be copied into the active project, usually:
@@ -1044,10 +1054,10 @@ python3 -m cc3d_builder.cli.main --state-keys
 
 ```text
 Rules_project/Rules_project.cc3d
-Rules_project/Simulation/wrapper_main.py
+Rules_project/Simulation/gen_code_main.py
 Rules_project/Simulation/rules.json
 Rules_project/Simulation/SimulationStepCode.py
-Rules_project/simulation_time_series/global_simulation_history.csv
+<RunningProject>/simulation_time_series/global_simulation_history.csv
 ```
 
 ### Source Project Profile
@@ -1061,6 +1071,9 @@ Rules_project/simulation_time_series/global_simulation_history.csv
 
 ```text
 docs/generated_code_index.md
+docs/runtime_vs_generated.md
+docs/sync_and_artifacts.md
+docs/audit_recording.md
 docs/intracellular_models.md
 docs/subcellular_systems.md
 ```

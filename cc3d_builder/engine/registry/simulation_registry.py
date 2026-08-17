@@ -8,7 +8,12 @@ import sqlite3
 from pathlib import Path
 from cc3d_builder.core.rule_schema import case_payload
 from cc3d_builder.core.structure_manager import StructureManager
-from cc3d_builder.core.project_profile import load_json, read_active_project, sync_sandbox_rules_to_profile
+from cc3d_builder.core.project_profile import (
+    load_json,
+    read_active_project,
+    sync_sandbox_artifacts_to_source,
+    sync_sandbox_rules_to_profile,
+)
 from cc3d_builder.engine.code_generator import CC3DDecompiledGenerator
 from cc3d_builder.injector.steppable_injector import SteppableInjector
 
@@ -109,6 +114,7 @@ class SimulationRegistry:
         
         if self.sm:
             self.sync_with_xml()
+            self._apply_initial_layout_from_settings()
         
         self._build_index()
 
@@ -240,6 +246,8 @@ class SimulationRegistry:
         volume_markers_synced = False
         code_generated = False
         generator_error = None
+        source_artifact_summary = {"synced": False, "copied": []}
+        source_artifact_error = None
 
         sm = self.sm
         if sm is None:
@@ -303,6 +311,16 @@ class SimulationRegistry:
 
         self._enforce_player_display_defaults()
 
+        try:
+            source_artifact_summary = sync_sandbox_artifacts_to_source(
+                self.project_path,
+                include_generated_code=code_generated,
+            )
+        except Exception as exc:
+            source_artifact_error = str(exc)
+            if not quiet:
+                print(f"⚠️ [Profile] Could not sync sandbox artifacts to source project: {exc}")
+
         return {
             **state_summary,
             "xml_updated": xml_updated,
@@ -310,6 +328,10 @@ class SimulationRegistry:
             "volume_markers_synced": volume_markers_synced,
             "code_generated": code_generated,
             "generator_error": generator_error,
+            "source_artifacts_synced": bool(source_artifact_summary.get("synced")),
+            "source_artifact_paths": source_artifact_summary.get("copied", []),
+            "source_project_path": source_artifact_summary.get("source_project_path"),
+            "source_artifact_error": source_artifact_error or source_artifact_summary.get("error"),
             "rule_count": len(self.rules),
             "celltypes": [
                 str(name)
@@ -426,6 +448,7 @@ class SimulationRegistry:
         desired = {
             "ClusterBordersOn": ("bool", "0"),
             "ClusterBorderColor": ("color", "#000000"),
+            "CellGlyphsOn": ("bool", "0"),
         }
 
         try:
@@ -449,29 +472,50 @@ class SimulationRegistry:
             print(f"⚠️ [Player Settings] Could not enforce cluster border defaults: {exc}")
 
     def _sync_initializers_to_xml(self, sm):
+        active_inits = {}
+        for name, params in self.celltype_params.items():
+            if params.get("should_initialize", True):
+                active_inits[name] = params.get("initial_count", 5)
+
         if not isinstance(self.settings, dict):
-            return False
-
-        initial_layout = self.settings.get("initial_layout", {})
+            initial_layout = {}
+        else:
+            initial_layout = self.settings.get("initial_layout", {})
         if not isinstance(initial_layout, dict):
-            return False
+            initial_layout = {}
 
+        has_explicit_regions = "regions" in initial_layout
         layout_regions = list(initial_layout.get("regions") or [])
         for patch in initial_layout.get("interstitial_patches") or []:
             patch_region = self._interstitial_patch_to_region(patch)
             if patch_region:
                 layout_regions.append(patch_region)
 
-        if not layout_regions:
+        if has_explicit_regions or layout_regions:
+            sm.update_initializers(active_inits, layout_regions=layout_regions)
+            return True
+
+        modified = False
+        for name, count in active_inits.items():
+            if hasattr(sm, "ensure_initializer_region") and sm.ensure_initializer_region(name, count=count):
+                modified = True
+        return modified
+
+    def _apply_initial_layout_from_settings(self):
+        if self.sm is None or not isinstance(self.settings, dict):
             return False
-
-        active_inits = {}
-        for name, params in self.celltype_params.items():
-            if params.get("should_initialize", True):
-                active_inits[name] = params.get("initial_count", 5)
-
-        sm.update_initializers(active_inits, layout_regions=layout_regions)
-        return True
+        initial_layout = self.settings.get("initial_layout")
+        if not isinstance(initial_layout, dict):
+            return False
+        if "regions" not in initial_layout and not initial_layout.get("interstitial_patches"):
+            return False
+        try:
+            if self._sync_initializers_to_xml(self.sm):
+                self.sm.save()
+                return True
+        except Exception as exc:
+            print(f"⚠️ [Registry] Could not apply profile initializer layout: {exc}")
+        return False
 
     @staticmethod
     def _interstitial_patch_to_region(patch):
@@ -713,7 +757,9 @@ class SimulationRegistry:
                     active_inits[name] = count
 
             initial_layout = self.settings.get("initial_layout", {}) if isinstance(self.settings, dict) else {}
-            layout_regions = initial_layout.get("regions") if isinstance(initial_layout, dict) else None
+            layout_regions = None
+            if isinstance(initial_layout, dict) and "regions" in initial_layout:
+                layout_regions = initial_layout.get("regions") or []
             sm.update_initializers(active_inits, layout_regions=layout_regions)
 
             sm.save()
@@ -765,6 +811,12 @@ class SimulationRegistry:
                 xml_volume_params = self.sm.migrate_volume_data()
             except Exception as exc:
                 print(f"⚠️ [Sync] Could not read XML VolumeEnergyParameters: {exc}")
+        initializer_summary = {}
+        if hasattr(self.sm, "initializer_summary_by_type"):
+            try:
+                initializer_summary = self.sm.initializer_summary_by_type()
+            except Exception as exc:
+                print(f"⚠️ [Sync] Could not read XML initializer regions: {exc}")
         modified = False
         for name in xml_names:
             volume_params = self._volume_params_for_celltype(
@@ -774,9 +826,11 @@ class SimulationRegistry:
             )
             if name not in self.celltype_params:
                 print(f"🔗 [Sync] Adding XML cell type to registry: {name}")
+                init_entry = initializer_summary.get(name, {})
+                should_initialize = bool(init_entry.get("regions"))
                 self.celltype_params[name] = {
-                    "should_initialize": True,
-                    "initial_count": 5,   
+                    "should_initialize": should_initialize,
+                    "initial_count": int(init_entry.get("cells") or (5 if should_initialize else 0)),
                     "targetVolume": volume_params.get("targetVolume", 50.0),
                     "lambdaVolume": volume_params.get("lambdaVolume", 2.0)
                 }

@@ -7,6 +7,7 @@ from pathlib import Path
 from pprint import pformat
 
 from cc3d_builder.core.rule_schema import validate_rules_schema
+from cc3d_builder.template.custom_runtime_helpers import CUSTOM_RUNTIME_HELPERS
 
 
 USER_HOOKS_START = "    # === USER CUSTOM HOOKS START ==="
@@ -59,6 +60,7 @@ class CC3DDecompiledGenerator:
         field_literal = pformat(self._clean_literal(self.field_params), width=120, sort_dicts=False)
         intracellular_literal = pformat(self._clean_literal(self.intracellular_models), width=120, sort_dicts=False)
         subcellular_literal = pformat(self._clean_literal(self.subcellular_systems), width=120, sort_dicts=False)
+        helper_literal = pformat(self._clean_literal(CUSTOM_RUNTIME_HELPERS), width=120, sort_dicts=False)
 
         code = f'''from cc3d.core.PySteppables import *
 import copy
@@ -79,6 +81,7 @@ COMPILED_CELLTYPE_PARAMS = {celltype_literal}
 COMPILED_FIELD_PARAMS = {field_literal}
 COMPILED_INTRACELLULAR_MODELS = {intracellular_literal}
 COMPILED_SUBCELLULAR_SYSTEMS = {subcellular_literal}
+COMPILED_CUSTOM_RUNTIME_HELPERS = {helper_literal}
 
 
 class {class_name}({base_class}):
@@ -316,6 +319,19 @@ GENERATED_HELPERS = r'''
             interval = 50
         return interval > 0 and mcs > 0 and mcs % interval == 0
 
+    def _audit_cell_sequence_limit(self):
+        raw_limit = self.settings.get("audit_cell_sequence_limit", 3)
+        if isinstance(raw_limit, str):
+            text = raw_limit.strip().lower()
+            if text in {"all", "*", "full"}:
+                return None
+            if text in {"none", "off", "false"}:
+                return 0
+        try:
+            return max(0, int(self._to_float(raw_limit, 3)))
+        except Exception:
+            return 3
+
     def _flatten_cell_dict(self, mapping, parent_key="", sep="_"):
         items = []
         if not isinstance(mapping, dict):
@@ -376,13 +392,15 @@ GENERATED_HELPERS = r'''
         self._write_audit_csv(global_file, self._audit_buffer, fieldnames)
         print(f"[GeneratedRuleEngine] Audit data exported to {global_file}")
 
+        limit = self._audit_cell_sequence_limit()
         seen = []
-        for row in self._audit_buffer:
-            cell_id = row.get("Cell_ID")
-            if cell_id not in seen:
-                seen.append(cell_id)
-            if len(seen) >= 3:
-                break
+        if limit != 0:
+            for row in self._audit_buffer:
+                cell_id = row.get("Cell_ID")
+                if cell_id not in seen:
+                    seen.append(cell_id)
+                if limit is not None and len(seen) >= limit:
+                    break
         for cell_id in seen:
             rows = [row for row in self._audit_buffer if row.get("Cell_ID") == cell_id]
             self._write_audit_csv(self.audit_output_dir / f"cell_id_{cell_id}_sequence.csv", rows, fieldnames)
@@ -428,6 +446,10 @@ GENERATED_HELPERS = r'''
         cell.dict.setdefault("persistent_tracking", {})
         cell.dict.setdefault("intracellular", {})
         cell.dict.setdefault("subcellular", {})
+
+    def ensure_cell_state(self, cell):
+        self._ensure_cell_dict(cell)
+        return cell.dict["state"]
 
     def _step_snapshot(self, mcs):
         events = []
@@ -709,7 +731,7 @@ GENERATED_HELPERS = r'''
                             expr = expr.replace("{" + str(var_key) + "}", str(var_value))
                         import re
                         expr = re.sub(r"\{.*?}", "0", expr)
-                        resolved[key] = float(eval(expr, {"__builtins__": None}, {"math": math, **local_vars}))
+                        resolved[key] = float(eval(expr, {"__builtins__": {}}, {"math": math, **local_vars}))
                     except Exception as exc:
                         print(f"[GeneratedRuleEngine] Dynamic parameter failed: {value}: {exc}")
                         resolved[key] = value
@@ -776,7 +798,7 @@ GENERATED_HELPERS = r'''
             elif mode == "expression":
                 expr = spec.get("expression", "1")
                 context = self._frequency_context(cell, state_key, state_val)
-                value = float(eval(expr, {"__builtins__": None}, context))
+                value = float(eval(expr, {"__builtins__": {}}, context))
             else:
                 base = float(spec.get("base_frequency", 1.0))
                 slope = float(spec.get("slope", 1.0))
@@ -856,6 +878,94 @@ GENERATED_HELPERS = r'''
         if target_text.lower() in {"global", "all", "*"}:
             return list(self.cell_list)
         return list(self.cell_list_by_type(getattr(self, target_text.upper(), 0)))
+
+    def target_cells(self, target):
+        return self._target_cells(target)
+
+    def available_helpers(self):
+        return copy.deepcopy(COMPILED_CUSTOM_RUNTIME_HELPERS)
+
+    def get_current_mcs(self):
+        return int(getattr(self, "current_mcs", 0))
+
+    def resolve_numeric(self, value, cell=None, default=0.0):
+        return self._condition_number(value, default=default, cell=cell)
+
+    def get_cell_type_id(self, type_name):
+        return self._cell_type_id(type_name)
+
+    def get_cell_type_name(self, cell):
+        if cell is None:
+            return ""
+        try:
+            type_name = self.get_type_name_by_cell(cell)
+            if type_name:
+                return str(type_name)
+        except Exception:
+            pass
+
+        type_id = getattr(cell, "type", None)
+        for name in self.celltype_params:
+            if self._cell_type_id(name) == type_id:
+                return str(name)
+        return "" if type_id is None else str(type_id)
+
+    def get_neighbor_data(self, cell, include_medium=False):
+        if cell is None:
+            return []
+        try:
+            neighbors = []
+            for neighbor, common_surface_area in self.getCellNeighborDataList(cell):
+                if neighbor is None and not include_medium:
+                    continue
+                neighbors.append((neighbor, common_surface_area))
+            return neighbors
+        except Exception:
+            return []
+
+    def get_neighbor_cells(self, cell):
+        return [neighbor for neighbor, _area in self.get_neighbor_data(cell) if neighbor is not None]
+
+    def get_min_distance_to_type(self, cell, target_type_name):
+        target_type_id = self._cell_type_id(target_type_name)
+        if cell is None or target_type_id is None:
+            return float("inf")
+
+        min_distance = float("inf")
+        try:
+            target_cells = self.cell_list_by_type(target_type_id)
+        except Exception:
+            return min_distance
+
+        for target_cell in target_cells:
+            if getattr(cell, "id", None) == getattr(target_cell, "id", None):
+                continue
+            try:
+                dist = self.distance(
+                    cell.xCOM, cell.yCOM, cell.zCOM,
+                    target_cell.xCOM, target_cell.yCOM, target_cell.zCOM,
+                )
+            except Exception:
+                dist = math.sqrt(
+                    (cell.xCOM - target_cell.xCOM) ** 2
+                    + (cell.yCOM - target_cell.yCOM) ** 2
+                    + (cell.zCOM - target_cell.zCOM) ** 2
+                )
+            if dist < min_distance:
+                min_distance = dist
+        return min_distance
+
+    def get_specific_surface_area(self, cell):
+        return self._morphology_value(cell, "specific_surface")
+
+    def get_elongation_ratio(self, cell):
+        return self._morphology_value(cell, "elongation")
+
+    def get_intracellular_value(self, cell, model_name, variable, default=0.0):
+        return self._intracellular_value(cell, model_name, variable, default=default)
+
+    def get_subcellular_value(self, cell, system, variable="stage", default=0.0):
+        return self._subcellular_value(cell, system, variable, default=default)
 
     def _evaluate_condition(self, block, cell):
         full_type = block.get("condition_type", block.get("type", "TRUE")) if isinstance(block, dict) else "TRUE"
@@ -2192,11 +2302,9 @@ GENERATED_HELPERS = r'''
     def _solve_growth_model(self, payload, cell):
         model = payload.get("model", "linear")
         if model == "hill":
-            regulators = payload.get("regulator")
+            regulators = self._model_regulators(payload.get("regulator"))
             if not regulators:
                 return 0.0
-            if not isinstance(regulators, list):
-                regulators = [regulators]
             y_max = self._to_float(payload.get("y_max", 1.0), 1.0)
             y_min = self._to_float(payload.get("y_min", 0.0), 0.0)
             k_val = self._to_float(payload.get("K", payload.get("k", 0.5)), 0.5)
@@ -2211,26 +2319,37 @@ GENERATED_HELPERS = r'''
             if not expr:
                 return 0.0
             context = self._numeric_context(cell)
-            for field_name in dir(self.field):
-                if field_name.startswith("_"):
+            context.update(self._numeric_state_context(cell))
+            symbols = set(self._model_regulators(payload.get("regulator")))
+            symbols.update(re.findall(r"\b[A-Za-z_]\w*\b", str(expr)))
+            reserved = {"math", "min", "max", "abs", "True", "False", "None", "cell"}
+            for field_name in sorted(symbols - reserved):
+                if field_name in context:
                     continue
-                try:
-                    field = getattr(self.field, field_name)
-                    context[field_name] = float(field[int(cell.xCOM), int(cell.yCOM), int(cell.zCOM)])
-                except Exception:
-                    pass
+                context[field_name] = self._field_value(field_name, cell)
             try:
-                return float(eval(expr, {"__builtins__": None}, {"math": math, "min": min, "max": max, "abs": abs, **context}))
+                return float(eval(expr, {"__builtins__": {}}, {"math": math, "min": min, "max": max, "abs": abs, **context}))
             except Exception as exc:
                 print(f"[GeneratedGrowth] Expression failed: {expr}: {exc}")
                 return 0.0
-        regulators = payload.get("regulator")
+        regulators = self._model_regulators(payload.get("regulator"))
         alpha = payload.get("alpha", 1.0)
         if not regulators:
             return 0.0
-        regulators = regulators if isinstance(regulators, list) else [regulators]
         alphas = alpha if isinstance(alpha, list) else [alpha] * len(regulators)
         return sum(self._to_float(coef, 0.0) * self._field_value(reg, cell) for reg, coef in zip(regulators, alphas))
+
+    def _model_regulators(self, regulator):
+        if regulator is None:
+            return []
+        raw = regulator if isinstance(regulator, list) else [regulator]
+        regulators = []
+        for item in raw:
+            text = str(item).strip()
+            if not text or text.lower() in {"none", "null", "nan"}:
+                continue
+            regulators.append(text)
+        return regulators
 
     def _solve_physical_model(self, model_dict, cell):
         if not isinstance(model_dict, dict) or "model" not in model_dict:
@@ -3061,6 +3180,20 @@ GENERATED_HELPERS = r'''
                 context[f"cell.{key}"] = value
         return context
 
+    def _numeric_state_context(self, cell):
+        if cell is None:
+            return {}
+        context = {}
+        for key, value in self._flatten_cell_dict(getattr(cell, "dict", {})).items():
+            if isinstance(value, bool):
+                context[str(key)] = float(value)
+                continue
+            if isinstance(value, (int, float)):
+                numeric = float(value)
+                if math.isfinite(numeric):
+                    context[str(key)] = numeric
+        return context
+
     def _numeric_attr(self, obj, attr_name):
         try:
             value = getattr(obj, attr_name)
@@ -3107,6 +3240,15 @@ GENERATED_HELPERS = r'''
         text = str(value).strip()
         if text.lower() in {"inf", "+inf", "infinity", "+infinity"}:
             return float("inf")
+
+        if text.startswith("{") and text.endswith("}"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    return self._condition_number(parsed, default=default, cell=cell)
+            except Exception:
+                pass
+
         try:
             return float(text)
         except ValueError:
@@ -3118,7 +3260,7 @@ GENERATED_HELPERS = r'''
 
         try:
             context = self._frequency_context(cell, "state", 0.0)
-            return float(eval(expr, {"__builtins__": None}, context))
+            return float(eval(expr, {"__builtins__": {}}, context))
         except Exception as exc:
             print(f"[GeneratedRuleEngine] Condition numeric evaluation failed for {value!r}: {exc}")
             return float(default)
@@ -3304,6 +3446,9 @@ GENERATED_HELPERS = r'''
         except Exception:
             return 0.0
 
+    def get_field_value(self, field_name, cell):
+        return self._field_value(field_name, cell)
+
     def _contact_ratio(self, cell, target_type_name):
         target_type_id = self._cell_type_id(target_type_name)
         if target_type_id is None:
@@ -3315,6 +3460,9 @@ GENERATED_HELPERS = r'''
             if neighbor and neighbor.type == target_type_id:
                 target_area += area
         return target_area / total_area if total_area > 0 else 0.0
+
+    def get_contact_ratio(self, cell, target_type_name):
+        return self._contact_ratio(cell, target_type_name)
 
     def _cell_type_id(self, type_name):
         if not type_name:

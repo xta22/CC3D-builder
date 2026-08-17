@@ -1,4 +1,4 @@
-id,order,behaviour,target,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,model,alpha,y_min,y_max,k,n,expression,frequency,once,debug
-GROWTH_LINEAR,1,growth,CellA,time_window,,0,1000,,,,,,,,linear,0.5,,,,,,1,FALSE,FALSE
-GROWTH_HILL_ENV,2,growth,CellB,threshold,,,,Environment,Oxygen,<,0.2,,,,hill,,0,2,0.5,4,,"{""type"":""state_feedback_frequency"",""state_key"":""targetVolume"",""mode"":""linear"",""base_frequency"":1,""slope"":0.01,""min_frequency"":1,""max_frequency"":100}",FALSE,TRUE
-GROWTH_EXPR_STATE,3,growth,CellA,state,,,,State,division_count,>=,2,,,,expression,,,,,,0.01 * Oxygen,5,FALSE,FALSE
+id,order,behaviour,target,when_type,p,when_start,when_end,regulator_type,regulator,operator,value,env_sampling_mode,env_radius,env_target_type,model_regulator,model,alpha,y_min,y_max,k,n,expression,frequency,once,debug
+GROWTH_LINEAR,1,growth,CellA,time_window,,0,1000,,,,,,,,Oxygen,linear,0.5,,,,,,1,FALSE,FALSE
+GROWTH_HILL_ENV,2,growth,CellB,threshold,,,,Environment,Oxygen,<,0.2,,,,Oxygen,hill,,0,2,0.5,4,,"{""type"":""state_feedback_frequency"",""state_key"":""targetVolume"",""mode"":""linear"",""base_frequency"":1,""slope"":0.01,""min_frequency"":1,""max_frequency"":100}",FALSE,TRUE
+GROWTH_EXPR_STATE,3,growth,CellA,state,,,,State,division_count,>=,2,,,,Oxygen,expression,,,,,,0.01 * Oxygen,5,FALSE,FALSE

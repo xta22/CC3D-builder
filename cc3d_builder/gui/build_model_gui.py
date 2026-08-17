@@ -1,5 +1,22 @@
 # build_model_gui.py
-from PyQt5.QtWidgets import QInputDialog, QLineEdit, QVBoxLayout, QDialog, QDialogButtonBox, QLabel, QFormLayout
+from PyQt5.QtWidgets import QInputDialog, QLineEdit, QVBoxLayout, QDialog, QDialogButtonBox, QLabel, QFormLayout, QMessageBox
+
+
+def _parse_regulators(raw_text):
+    regulators = [
+        item.strip()
+        for item in str(raw_text or "").split(",")
+        if item.strip() and item.strip().lower() not in {"none", "null", "nan"}
+    ]
+    return regulators if regulators else None
+
+
+def _warn_missing_regulator(parent):
+    QMessageBox.warning(
+        parent,
+        "Missing Regulator Field",
+        "Field-regulated physical models require at least one CC3D diffusion field, e.g. Oxygen.",
+    )
 
 def build_model_gui(behaviour, parent=None):
     models = ["hill", "linear", "expression"]
@@ -37,7 +54,10 @@ def build_model_gui(behaviour, parent=None):
         layout.addRow(buttons)
 
         if dialog.exec_() == QDialog.Accepted:
-            regs = [r.strip() for r in reg_input.text().split(",")]
+            regs = _parse_regulators(reg_input.text())
+            if not regs:
+                _warn_missing_regulator(parent)
+                return None
             return {
                 "model": "hill",
                 "regulator": regs if len(regs) > 1 else regs[0],
@@ -53,15 +73,23 @@ def build_model_gui(behaviour, parent=None):
         reg, ok1 = QInputDialog.getText(parent, "Linear Model", "Regulator diffusion field(s), comma-separated:")
         alpha, ok2 = QInputDialog.getDouble(parent, "Linear Model", "Alpha:", 0.1, -100, 100, 4)
         if ok1 and ok2:
-            return {"model": "linear", "regulator": reg, "parameters": {"alpha": alpha}}
+            regs = _parse_regulators(reg)
+            if not regs:
+                _warn_missing_regulator(parent)
+                return None
+            return {"model": "linear", "regulator": regs if len(regs) > 1 else regs[0], "parameters": {"alpha": alpha}}
 
     elif model_type == "expression":
         reg, ok1 = QInputDialog.getText(parent, "Expression Model", "Regulator diffusion field(s), comma-separated:")
         expr, ok2 = QInputDialog.getText(parent, "Expression Model", "Expression using field names (e.g. 0.02 * Oxygen):")
         if ok1 and ok2:
+            regs = _parse_regulators(reg)
+            if not regs:
+                _warn_missing_regulator(parent)
+                return None
             return {
                 "model": "expression", 
-                "regulator": reg, 
+                "regulator": regs if len(regs) > 1 else regs[0],
                 "parameters": {   
                     "expression": expr
                 }

@@ -26,8 +26,42 @@ Where to edit:
     3. Edit match(...) when the whole custom rule needs a global guard.
     4. Edit run(...) to implement the custom action.
 
+Runtime helpers available in both RuleEngine and generated-code runtimes:
+    Canonical catalog:
+        cc3d_builder.template.custom_runtime_helpers.CUSTOM_RUNTIME_HELPERS
+
+    Runtime introspection:
+        context.available_helpers()
+
+    context.available_helpers() -> dict
+    context.ensure_cell_state(cell) -> dict
+    context.get_current_mcs() -> int
+    context.resolve_numeric(value, cell=None, default=0.0) -> float
+    context.target_cells(target_type_name_or_all) -> list[cell]
+    context.get_cell_type_id(type_name) -> int | None
+    context.get_cell_type_name(cell) -> str
+    context.get_field_value(field_name, cell) -> float
+    context.get_neighbor_data(cell, include_medium=False) -> list[(cell, area)]
+    context.get_neighbor_cells(cell) -> list[cell]
+    context.get_contact_ratio(cell, target_type_name) -> float
+    context.get_min_distance_to_type(cell, target_type_name) -> float
+    context.get_specific_surface_area(cell) -> float
+    context.get_elongation_ratio(cell) -> float
+    context.get_intracellular_value(cell, model_name, variable, default=0.0) -> value
+    context.get_subcellular_value(cell, system, variable="stage", default=0.0) -> value
+
+Template-local conversion helpers included below:
+    _to_float(value, default=0.0) -> float
+    _to_int(value, default=0) -> int
+
+Parameter convention:
+    Numeric parameters should use context.resolve_numeric(...). It accepts both
+    static numbers and dynamic expressions such as {volume} * 0.01.
+    String/name parameters should use params.get(<key>) or "default" so blank
+    GUI/CLI inputs still fall back to the default.
+
 Interactive parameters:
-    The GUI scans literal params.get("...") keys in this file for full custom
+    GUI/CLI scans literal parameter reads in this file for full custom
     rule scripts. In this template, target_type, state_key, and value become
     editable script parameters when the script is selected through the GUI.
 """
@@ -43,19 +77,17 @@ def _to_float(value, default=0.0):
         return default
 
 
+def _to_int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
 def _iter_cells(context, target_type=""):
     """Return all cells or cells of a requested CC3D type name."""
     target_type = str(target_type or "").strip()
-
-    if target_type and hasattr(context, "_target_cells"):
-        return list(context._target_cells(target_type))
-
-    if target_type and hasattr(context, "cell_list_by_type"):
-        type_id = getattr(context, target_type.upper(), None)
-        if type_id is not None:
-            return list(context.cell_list_by_type(type_id))
-
-    return list(getattr(context, "cell_list", []) or [])
+    return list(context.target_cells(target_type or "all"))
 
 
 def match(context):
@@ -67,16 +99,14 @@ def match(context):
 def run(context, params):
     """Execute custom model logic."""
     # EDIT HERE: these keys are detected by the full custom rule GUI wizard.
-    target_type = params.get("target_type", "")
-    state_key = params.get("state_key", "custom_flag")
-    value = _to_float(params.get("value", 1.0), 1.0)
+    target_type = params.get("target_type") or ""
+    state_key = params.get("state_key") or "custom_flag"
+    raw_value = params.get("value", 1.0)
 
     # EDIT HERE: replace this example state write with project-specific logic.
     for cell in _iter_cells(context, target_type):
         if cell is None:
             continue
-        if hasattr(context, "_ensure_cell_dict"):
-            context._ensure_cell_dict(cell)
-        else:
-            cell.dict.setdefault("state", {})
-        cell.dict["state"][state_key] = value
+        state = context.ensure_cell_state(cell)
+        value = context.resolve_numeric(raw_value, cell, 1.0)
+        state[state_key] = value

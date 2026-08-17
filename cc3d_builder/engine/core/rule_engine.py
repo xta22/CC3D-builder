@@ -1,5 +1,6 @@
 # rule_engine.py
 import copy
+import json
 from pathlib import Path
 import math
 import importlib.util
@@ -31,6 +32,7 @@ from cc3d_builder.engine.core.intracellular_state import read_intracellular_valu
 from cc3d_builder.engine.core.subcellular_state import read_subcellular_value
 from cc3d_builder.core.project_profile import load_json
 from cc3d_builder.core.rule_schema import case_payload, first_case_payload, validate_rules_schema
+from cc3d_builder.template.custom_runtime_helpers import CUSTOM_RUNTIME_HELPERS
 
 
 INTRACELLULAR_GLOBAL_ACTIONS = {"step", "step_all", "timestep", "timestep_all", "global_step"}
@@ -458,6 +460,99 @@ class RuleEngineSteppable(SteppableBasePy):
             return list(self.cell_list)
         return list(self.cell_list_by_type(getattr(self, target_text.upper(), 0)))
 
+    def target_cells(self, target):
+        return self._target_cells(target)
+
+    def available_helpers(self):
+        return copy.deepcopy(CUSTOM_RUNTIME_HELPERS)
+
+    def get_current_mcs(self):
+        return int(getattr(self, "current_mcs", 0))
+
+    def resolve_numeric(self, value, cell=None, default=0.0):
+        return self._condition_number(value, default=default, cell=cell)
+
+    def get_cell_type_id(self, type_name):
+        if not type_name:
+            return None
+        return getattr(self, str(type_name).strip().upper(), None)
+
+    def get_cell_type_name(self, cell):
+        if cell is None:
+            return ""
+        try:
+            type_name = self.get_type_name_by_cell(cell)
+            if type_name:
+                return str(type_name)
+        except Exception:
+            pass
+
+        type_id = getattr(cell, "type", None)
+        for name in self.celltype_params:
+            if self.get_cell_type_id(name) == type_id:
+                return str(name)
+        return "" if type_id is None else str(type_id)
+
+    def get_neighbor_data(self, cell, include_medium=False):
+        if cell is None:
+            return []
+        try:
+            neighbors = []
+            for neighbor, common_surface_area in self.getCellNeighborDataList(cell):
+                if neighbor is None and not include_medium:
+                    continue
+                neighbors.append((neighbor, common_surface_area))
+            return neighbors
+        except Exception:
+            return []
+
+    def get_neighbor_cells(self, cell):
+        return [neighbor for neighbor, _area in self.get_neighbor_data(cell) if neighbor is not None]
+
+    def _condition_number(self, value, default=0.0, cell=None):
+        if value in (None, ""):
+            return float(default)
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, dict):
+            if "model" in value and "parameters" in value:
+                try:
+                    return float(self._solve_physical_model(value, cell))
+                except Exception as exc:
+                    print(f"[RuleEngine] Custom numeric physical model failed: {exc}")
+            return float(default)
+
+        text = str(value).strip()
+        if text.lower() in {"inf", "+inf", "infinity", "+infinity"}:
+            return float("inf")
+
+        if text.startswith("{") and text.endswith("}"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    return self._condition_number(parsed, default=default, cell=cell)
+            except Exception:
+                pass
+
+        try:
+            return float(text)
+        except ValueError:
+            pass
+
+        expr = text
+        import re
+        for key in re.findall(r"\{([^{}]+)\}", text):
+            expr = expr.replace(f"{{{key}}}", str(self._frequency_state_value(cell, key)))
+
+        try:
+            context = self._frequency_context(cell, "state", 0.0)
+            return float(eval(expr, {"__builtins__": None}, context))
+        except Exception as exc:
+            print(f"[RuleEngine] Custom numeric evaluation failed for {value!r}: {exc}")
+            return float(default)
+
     def _frequency_matches(self, raw_freq, mcs, cell=None):
         try:
             freq = self._solve_frequency(raw_freq, cell)
@@ -499,12 +594,16 @@ class RuleEngineSteppable(SteppableBasePy):
         if "subcellular" not in cell.dict:
             cell.dict["subcellular"] = {}
 
+    def ensure_cell_state(self, cell):
+        self._ensure_cell_dict(cell)
+        return cell.dict["state"]
+
 
     def get_contact_ratio(self, cell, target_type_name):
         if cell is None or not target_type_name:
             return 0.0
 
-        target_type_id = getattr(self, target_type_name.upper(), None)
+        target_type_id = self.get_cell_type_id(target_type_name)
 
         if target_type_id is None:
             print(f"[Warning] Unknown cell type: {target_type_name}")
@@ -513,7 +612,7 @@ class RuleEngineSteppable(SteppableBasePy):
         target_contact_area = 0.0
         total_contact_area = 0.0
 
-        neighbor_list = self.getCellNeighborDataList(cell)
+        neighbor_list = self.get_neighbor_data(cell, include_medium=True)
         if neighbor_list:
             for neighbor, common_surface_area in neighbor_list:
                 total_contact_area += common_surface_area
@@ -526,7 +625,7 @@ class RuleEngineSteppable(SteppableBasePy):
         return 0.0
 
     def get_min_distance_to_type(self, cell, target_type_name):
-        target_type_id = getattr(self, target_type_name.upper(), None)
+        target_type_id = self.get_cell_type_id(target_type_name)
         if target_type_id is None:
             print(f"[Warning] Unknown cell type for distance calculation: {target_type_name}")
             return float('inf')
@@ -918,11 +1017,13 @@ class RuleEngineSteppable(SteppableBasePy):
         if not isinstance(model_dict, dict) or "model" not in model_dict:
             return model_dict
 
-        model_type = model_dict["model"]
-        regulator = model_dict["regulator"]
-        params = model_dict["parameters"]
+        model_type = model_dict.get("model")
+        regulator = model_dict.get("regulator")
+        params = model_dict.get("parameters", {})
 
-        regulators_list = regulator if isinstance(regulator, list) else [regulator]
+        regulators_list = self._physical_model_regulators(regulator)
+        if model_type in {"hill", "linear"} and not regulators_list:
+            return 0.0
         reg_vals = {r: self.get_field_value(r, cell) for r in regulators_list}
 
         if model_type == "hill":
@@ -967,6 +1068,18 @@ class RuleEngineSteppable(SteppableBasePy):
                 return 0.0
 
         return 0.0
+
+    def _physical_model_regulators(self, regulator):
+        if regulator is None:
+            return []
+        raw = regulator if isinstance(regulator, list) else [regulator]
+        regulators = []
+        for item in raw:
+            text = str(item).strip()
+            if not text or text.lower() in {"none", "null", "nan"}:
+                continue
+            regulators.append(text)
+        return regulators
 
     def finish(self):
         """When the user clicks Stop on the CC3D interface, or when the simulation ends naturally, the C++ engine will automatically invoke the callback."""

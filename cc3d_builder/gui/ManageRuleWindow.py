@@ -18,7 +18,7 @@ from cc3d_builder.gui.build_model_gui import build_model_gui
 from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
 from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
 import importlib.util
-from cc3d_builder.utils_extensions.utils import process_custom_script, extract_params
+from cc3d_builder.utils_extensions.utils import collect_custom_params_gui, process_custom_script, extract_params
 from typing import TYPE_CHECKING, Any, List, Dict
 if TYPE_CHECKING:
     from cc3d_builder.engine.registry.simulation_registry import SimulationRegistry
@@ -527,23 +527,44 @@ class ManageRulesWindow(QWidget):
 
         # --- col4 Condition ---
         if col == 4:
-            mode = self._choose_block_edit_mode(
-                "Edit Condition",
-                "Edit existing condition parameters only",
-                "Rebuild condition logic from wizard",
-            )
+            if beh == "custom_script":
+                mode = "params"
+            else:
+                mode = self._choose_block_edit_mode(
+                    "Edit Condition",
+                    "Edit existing condition parameters only",
+                    "Rebuild condition logic from wizard",
+                )
             if mode == "params":
                 case = self._first_case_ref(rule)
                 current_cond = copy.deepcopy(case.get("when", rule.get("when", {"condition_type": "TRUE", "params": {}})))
-                dialog = RuleBlockReviewDialog(
-                    title=f"Condition Parameters - Rule {rule_id}",
-                    block=current_cond,
-                    locked_keys={"condition_type"},
-                    parent=self,
-                )
-                if dialog.exec_() == QDialog.Accepted:
-                    case["when"] = dialog.get_updated_block()
-                    updated = True
+                cond_type = str(current_cond.get("condition_type", "")).strip().lower()
+                if cond_type == "custom":
+                    params = current_cond.get("params", {}) if isinstance(current_cond.get("params"), dict) else {}
+                    script_path = current_cond.get("script_path") or params.get("script_path")
+                    if not script_path:
+                        QMessageBox.warning(self, "Custom Condition", "This custom condition has no script_path.")
+                        return
+                    resolved_path = self._resolve_existing_script_path(script_path)
+                    if not resolved_path:
+                        QMessageBox.warning(self, "Custom Condition", f"Script not found:\n{script_path}")
+                        return
+                    final_params = collect_custom_params_gui(resolved_path, existing_params=params)
+                    if final_params is not None:
+                        current_cond["script_path"] = Path(resolved_path).expanduser().as_posix()
+                        current_cond["params"] = final_params
+                        case["when"] = current_cond
+                        updated = True
+                else:
+                    dialog = RuleBlockReviewDialog(
+                        title=f"Condition Parameters - Rule {rule_id}",
+                        block=current_cond,
+                        locked_keys={"condition_type"},
+                        parent=self,
+                    )
+                    if dialog.exec_() == QDialog.Accepted:
+                        case["when"] = dialog.get_updated_block()
+                        updated = True
             elif mode == "rebuild":
                 new_cond = self.main_editor.build_condition_gui()
                 if new_cond:
@@ -553,11 +574,14 @@ class ManageRulesWindow(QWidget):
 
         # --- col5 Parameters ---
         elif col == 5:
-            mode = self._choose_block_edit_mode(
-                "Edit Behaviour Parameters",
-                "Edit existing parameters only",
-                "Rebuild behaviour parameters from wizard",
-            )
+            if beh == "custom_script":
+                mode = "params"
+            else:
+                mode = self._choose_block_edit_mode(
+                    "Edit Behaviour Parameters",
+                    "Edit existing parameters only",
+                    "Rebuild behaviour parameters from wizard",
+                )
             if mode == "params":
                 updated = self._edit_apply_params_only(rule, rule_id)
             elif mode == "rebuild":
@@ -602,17 +626,37 @@ class ManageRulesWindow(QWidget):
             return None
         return "params" if choice == params_label else "rebuild"
 
+    def _resolve_existing_script_path(self, script_path):
+        raw_path = Path(str(script_path)).expanduser()
+        candidates = [raw_path]
+        if not raw_path.is_absolute():
+            candidates.extend([
+                Path.cwd() / raw_path,
+                self.registry.project_path / raw_path,
+                self.registry.project_path / "Simulation" / raw_path,
+            ])
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
     def _edit_apply_params_only(self, rule, rule_id):
         beh = rule.get("behaviour", "").lower()
 
         if beh == "custom_script":
-            script_path = rule.get("custom_script")
+            case = self._first_case_ref(rule)
+            payload = case_payload(case)
+            script_path = payload.get("script_path") or rule.get("custom_script")
             if script_path and script_path != "None":
-                detected_keys = extract_params(script_path)
-                saved_params = rule.get("apply_params", {})
-                dialog = ParamEditorDialog(detected_keys, saved_params)
-                if dialog.exec_() == QDialog.Accepted:
-                    rule["apply_params"] = dialog.get_final_params()
+                resolved_path = self._resolve_existing_script_path(script_path)
+                if not resolved_path:
+                    QMessageBox.warning(self, "Custom Script", f"Script not found:\n{script_path}")
+                    return False
+                saved_params = payload.get("apply_params", rule.get("apply_params", {}))
+                final_params = collect_custom_params_gui(resolved_path, existing_params=saved_params)
+                if final_params is not None:
+                    case["script_path"] = Path(resolved_path).expanduser().as_posix()
+                    case["apply_params"] = final_params
                     return True
             return False
 
@@ -639,6 +683,9 @@ class ManageRulesWindow(QWidget):
         return True
 
     def _collect_rebuilt_apply_params(self, rule, beh):
+        if beh == "custom_script":
+            return None
+
         new_data = None
         if beh == "growth":
             from cc3d_builder.gui.build_model_gui import build_model_gui
@@ -903,9 +950,17 @@ class CellInventoryWidget(QGroupBox):
             row_layout = QHBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 0, 0, 0)
 
-            summary = initializer_summary.get(name, {"regions": 0, "cells": 0})
+            summary = initializer_summary.get(name, {"regions": 0, "cells": 0, "unknown": False})
             init_label = QLabel("XML init: yes" if summary["regions"] else "XML init: no")
-            count_label = QLabel(f"~{summary['cells']} cells" if summary["regions"] else "0 cells")
+            if not summary["regions"]:
+                count_text = "0 cells"
+            elif summary.get("unknown") and not summary.get("cells"):
+                count_text = "unknown cells"
+            elif summary.get("unknown"):
+                count_text = f"~{summary['cells']}+ cells"
+            else:
+                count_text = f"~{summary['cells']} cells"
+            count_label = QLabel(count_text)
 
             delete_btn = QPushButton("Delete")
             delete_btn.clicked.connect(lambda _, n=name: self.delete_celltype(n))
@@ -928,18 +983,21 @@ class CellInventoryWidget(QGroupBox):
         except Exception:
             return summary
 
-        for region in root.findall(".//Steppable[@Type='UniformInitializer']/Region"):
-            types = self._split_initializer_types(region.findtext("Types", ""))
-            if not types:
+        for steppable in root.findall(".//Steppable"):
+            if not self._is_region_initializer_steppable(steppable):
                 continue
-            count = self._estimate_initializer_region_cells(region)
-            if count is None:
-                continue
-            per_type = max(1, count // len(types))
-            for cell_type in types:
-                entry = summary.setdefault(cell_type, {"regions": 0, "cells": 0})
-                entry["regions"] += 1
-                entry["cells"] += per_type
+            for region in steppable.findall("Region"):
+                types = self._split_initializer_types(region.findtext("Types", ""))
+                if not types:
+                    continue
+                count = self._estimate_initializer_region_cells(region)
+                for cell_type in types:
+                    entry = summary.setdefault(cell_type, {"regions": 0, "cells": 0, "unknown": False})
+                    entry["regions"] += 1
+                    if count is None:
+                        entry["unknown"] = True
+                    else:
+                        entry["cells"] += max(1, count // len(types))
         return summary
 
     def _structure_manager(self):
@@ -952,6 +1010,15 @@ class CellInventoryWidget(QGroupBox):
 
     def _split_initializer_types(self, raw_types):
         return [item.strip() for item in str(raw_types or "").split(",") if item.strip()]
+
+    @staticmethod
+    def _is_region_initializer_steppable(steppable):
+        if steppable.tag != "Steppable":
+            return False
+        kind = f"{steppable.get('Type', '')} {steppable.get('Name', '')}".lower()
+        if "initializer" not in kind:
+            return False
+        return steppable.get("Type") == "UniformInitializer" or bool(steppable.findall("Region"))
 
     def _estimate_initializer_region_cells(self, region):
         box_min = region.find("BoxMin")

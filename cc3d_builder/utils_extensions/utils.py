@@ -1,9 +1,12 @@
 # utils.py
 # cc3d_builder/utils_extensions/utils.py
+from pathlib import Path
+
 from cc3d_builder.utils_extensions.rule_parsing import (
     extract_celltypes_from_rule,
     extract_fields_from_rule,
     extract_params,
+    extract_param_defaults,
 )
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.core.rule_schema import validate_rule_schema
@@ -205,10 +208,11 @@ def process_custom_script(file_path, registry, ask_params_func, extract_params_f
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
+    param_defaults = extract_param_defaults(content)
     if extract_params_func:
         detected_keys = extract_params_func(content)
     else:
-        detected_keys = extract_params(content)
+        detected_keys = sorted(param_defaults)
 
     import importlib.util
     new_types = []
@@ -229,11 +233,66 @@ def process_custom_script(file_path, registry, ask_params_func, extract_params_f
             if p:
                 registry.add_celltype_params(ct, p["targetVolume"], p["lambdaVolume"])
 
+    initial_params = {key: param_defaults.get(key, "") for key in detected_keys}
+    initial_params.update(existing_params or {})
+
     from cc3d_builder.gui.ManageRuleWindow import ParamEditorDialog
-    dialog = ParamEditorDialog(detected_keys, existing_params or {})
+    dialog = ParamEditorDialog(detected_keys, initial_params)
     if dialog.exec_():
         final_p = dialog.get_final_params()
         final_p["manual_types"] = new_types
         return final_p
 
     return None
+
+
+def collect_custom_params_gui(script_path, existing_params=None):
+    content = Path(script_path).expanduser().read_text(encoding="utf-8")
+    param_defaults = extract_param_defaults(content)
+    detected_keys = sorted(param_defaults)
+    initial_params = {key: param_defaults.get(key, "") for key in detected_keys}
+    initial_params.update(existing_params or {})
+
+    from cc3d_builder.gui.ManageRuleWindow import ParamEditorDialog
+    dialog = ParamEditorDialog(detected_keys, initial_params)
+    if dialog.exec_():
+        return dialog.get_final_params()
+    return None
+
+
+def collect_custom_params_cli(script_path, existing_params=None):
+    from cc3d_builder.core.dynamic_numeric import parse_dynamic_numeric
+
+    content = Path(script_path).expanduser().read_text(encoding="utf-8")
+    param_defaults = extract_param_defaults(content)
+    existing_params = existing_params or {}
+    final_params = {}
+
+    if param_defaults:
+        print("\nDetected custom parameters:")
+    for key, default in param_defaults.items():
+        current = existing_params.get(key, default)
+        raw = input(f"  {key} [{current}]: ").strip()
+        value = current if raw == "" else raw
+        final_params[key] = parse_dynamic_numeric(value, value)
+
+    for key, value in existing_params.items():
+        if key not in final_params:
+            final_params[key] = value
+
+    while True:
+        raw = input("Add/edit manual param key=value (blank to finish): ").strip()
+        if not raw:
+            break
+        if "=" not in raw:
+            print("Use key=value.")
+            continue
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        if not key:
+            print("Key cannot be empty.")
+            continue
+        value = value.strip()
+        final_params[key] = parse_dynamic_numeric(value, value)
+
+    return final_params

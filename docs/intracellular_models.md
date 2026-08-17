@@ -135,6 +135,70 @@ The GUI edits these mappings with tables and dropdowns. The saved project file s
 
 Rule-level `inputs` and `outputs` are optional. They are appended to the model-level mappings and are useful only when one specific rule needs extra synchronization.
 
+## Minimal Oxygen Response Example
+
+A simple Antimony model can read the CC3D Oxygen field and write a model response back to cell state.
+
+Model file:
+
+```text
+Simulation/models/oxygen_response.ant
+```
+
+```antimony
+model oxygen_response()
+  O2 = 0;
+  Signal = 0;
+  k_decay = 0.05;
+
+  Signal' = O2 - k_decay * Signal;
+end
+```
+
+Registry entry:
+
+```text
+id: OxygenResponse
+engine: antimony
+model_name: OxygenResponse
+source_kind: file
+source_path: models/oxygen_response.ant
+attach_cell_types: CellA
+```
+
+Input mapping:
+
+```text
+Model variable: O2
+From: field
+Source key / variable: Oxygen
+Value/default: 0.0
+```
+
+Output mapping:
+
+```text
+Model variable: Signal
+To: state
+Target key: oxygen_signal
+Default: 0.0
+```
+
+Rule:
+
+```text
+behaviour: intracellular_model
+target: CellA
+model: OxygenResponse
+action: advance
+sync_inputs: true
+step_model: true
+sync_outputs: true
+frequency: 1
+```
+
+The rule's `model` field is matched against the registry entry's `id`, `model_name`, or `alias`. For new models, keep `id == model_name` unless there is a strong reason not to.
+
 ## Generated Code
 
 Generated native CC3D code embeds the model registry as:
@@ -173,7 +237,7 @@ The model registry CSV defines `intracellular_models`. It is opened from the `In
 Example file:
 
 ```text
-docs/intracellular_model_registry_example.csv
+cc3d_builder/template/intracellular_model_registry_template.csv
 ```
 
 Required or common columns:

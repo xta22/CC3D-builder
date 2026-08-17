@@ -13,6 +13,10 @@ def is_blank(val):
     return pd.isna(val) or str(val).strip() == ""
 
 
+def is_none_token(val):
+    return is_blank(val) or str(val).strip().lower() in {"none", "null", "nan"}
+
+
 def get_id(row):
     return str(row["id"] if "id" in row and not is_blank(row.get("id")) else row["rule_id"])
 
@@ -27,6 +31,16 @@ def get_target(row):
 def get_str(row, key, default=""):
     val = row.get(key, default)
     return default if is_blank(val) else str(val).strip()
+
+
+def get_model_regulator(row):
+    raw = _first_present(row, ["model_regulator", "field_regulator", "regulator"])
+    if is_none_token(raw):
+        return None
+    regulators = [part.strip() for part in str(raw).split(",") if not is_none_token(part)]
+    if not regulators:
+        return None
+    return regulators if len(regulators) > 1 else regulators[0]
 
 
 def clean_label(value):
@@ -118,7 +132,14 @@ def parse_safe_frequency(val):
 
 def validate_growth_row(row):
 
-    model = row["model"]
+    model = get_str(row, "model").lower()
+    regulator = get_model_regulator(row)
+
+    if model in {"linear", "hill"} and not regulator:
+        raise ValueError(
+            f"growth {model} model requires model_regulator/field_regulator "
+            "with at least one diffusion field, e.g. Oxygen"
+        )
 
     if model == "linear" and pd.isna(row["alpha"]):
         raise ValueError("linear model requires alpha")
@@ -409,7 +430,7 @@ def parse_growth_row(row):
 
     model = get_str(row, "model").lower()
     params["model"] = model
-    params["regulator"] = get_str(row, "regulator", "None")
+    params["regulator"] = get_model_regulator(row)
 
     if model == "linear":
         params["alpha"] = get_float(row, "alpha")

@@ -1504,3 +1504,6 @@ def cli_import_csv(csv_path, registry, sm, injector):
     print(f"🚀 Successfully imported {len(compiled_rules)} rules.")
     print(f"XML updated: {'yes' if summary.get('xml_updated') else 'no'}")
     print(f"Generated code: {'yes' if summary.get('code_generated') else 'no'}")
+    print(f"Source project artifacts synced: {'yes' if summary.get('source_artifacts_synced') else 'no'}")
+    if summary.get("source_artifact_error"):
+        print(f"Source artifact sync error: {summary['source_artifact_error']}")

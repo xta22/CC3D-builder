@@ -1,8 +1,6 @@
 # xml_config_editor.py
 import copy
-import shutil
 import xml.etree.ElementTree as ET
-from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
@@ -290,6 +288,7 @@ class XMLConfigEditor(QDialog):
             "should_initialize": True,
             "initial_count": 5,
         }
+        self.initializer_regions.append(self._default_initializer_region(name, count=5))
         self._deleted_celltypes.discard(name)
         self.reload_from_memory()
 
@@ -319,8 +318,23 @@ class XMLConfigEditor(QDialog):
         if reply != QMessageBox.Yes:
             return
         self.celltype_params.pop(name, None)
+        self._remove_initializer_type_from_local(name)
         self._deleted_celltypes.add(name)
         self.reload_from_memory()
+
+    def _remove_initializer_type_from_local(self, name):
+        updated_regions = []
+        for region in self.initializer_regions:
+            types = self._split_initializer_types(region.get("types", ""))
+            if name not in types:
+                updated_regions.append(region)
+                continue
+            remaining = [cell_type for cell_type in types if cell_type != name]
+            if remaining:
+                updated_region = copy.deepcopy(region)
+                updated_region["types"] = ",".join(remaining)
+                updated_regions.append(updated_region)
+        self.initializer_regions = updated_regions
 
     def add_field(self):
         name, ok = QInputDialog.getText(self, "Add Field", "New chemical field name:")
@@ -395,20 +409,26 @@ class XMLConfigEditor(QDialog):
     def add_initializer_region(self):
         available = [name for name in self.celltype_params.keys() if str(name).lower() != "medium"]
         default_type = available[0] if available else "Cell"
-        region = {
-            "enabled": True,
-            "types": default_type,
-            "min_x": 20,
-            "min_y": 20,
-            "min_z": 0,
-            "max_x": 120,
-            "max_y": 120,
-            "max_z": 1,
-            "width": 10,
-            "gap": 0,
-        }
-        self.initializer_regions.append(region)
+        self.initializer_regions.append(self._default_initializer_region(default_type))
         self._populate_initializer_table()
+
+    def _default_initializer_region(self, cell_type, count=25):
+        width = 5
+        gap = 0
+        side = int((max(1, int(count)) ** 0.5) * width) + 2
+        offset = 20 + (len(self.initializer_regions) % 8) * 15
+        return {
+            "enabled": True,
+            "types": cell_type,
+            "min_x": offset,
+            "min_y": offset,
+            "min_z": 0,
+            "max_x": offset + side,
+            "max_y": offset + side,
+            "max_z": 1,
+            "width": width,
+            "gap": gap,
+        }
 
     def delete_selected_initializer_region(self):
         row = self.initializer_table.currentRow()
@@ -460,12 +480,12 @@ class XMLConfigEditor(QDialog):
             return
 
         try:
-            self._backup_xml()
             self._apply_celltypes_to_registry_and_xml()
             self._apply_fields_to_registry()
             self.structure_manager.ensure_field_xml_from_registry(self.registry.field_params)
             self._write_contact_matrix(contact_types, contact_matrix)
             self._write_initializer_regions()
+            self._sync_initializer_layout_to_registry()
             self.structure_manager.save()
             self.registry.save()
             self._xml_mtime_ns = self._current_xml_mtime_ns()
@@ -616,7 +636,7 @@ class XMLConfigEditor(QDialog):
     def _write_initializer_regions(self):
         for parent in self.structure_manager.root.iter():
             for steppable in list(parent):
-                if steppable.tag == "Steppable" and steppable.get("Type") == "UniformInitializer":
+                if self._is_uniform_initializer_steppable(steppable):
                     parent.remove(steppable)
 
         enabled_regions = [region for region in self.initializer_regions if region.get("enabled", True)]
@@ -645,12 +665,43 @@ class XMLConfigEditor(QDialog):
 
         self.structure_manager.root.append(steppable)
 
+    def _sync_initializer_layout_to_registry(self):
+        settings = self.registry.settings if isinstance(self.registry.settings, dict) else {}
+        self.registry.settings = settings
+        settings["initial_layout"] = {
+            "regions": self._initializer_regions_for_registry(),
+        }
+
+    def _initializer_regions_for_registry(self):
+        regions = []
+        for region in self.initializer_regions:
+            if not region.get("enabled", True):
+                continue
+            regions.append({
+                "types": str(region.get("types", "")).strip(),
+                "box_min": {
+                    "x": int(region.get("min_x", 0)),
+                    "y": int(region.get("min_y", 0)),
+                    "z": int(region.get("min_z", 0)),
+                },
+                "box_max": {
+                    "x": int(region.get("max_x", 1)),
+                    "y": int(region.get("max_y", 1)),
+                    "z": int(region.get("max_z", 1)),
+                },
+                "width": int(region.get("width", 5)),
+                "gap": int(region.get("gap", 0)),
+            })
+        return regions
+
     def _read_initializer_regions_from_xml(self):
         regions = []
         root = getattr(self.structure_manager, "root", None)
         if root is None:
             return regions
-        for steppable in root.findall(".//Steppable[@Type='UniformInitializer']"):
+        for steppable in root.findall(".//Steppable"):
+            if not self._is_uniform_initializer_steppable(steppable):
+                continue
             for region in steppable.findall("Region"):
                 box_min = region.find("BoxMin")
                 box_max = region.find("BoxMax")
@@ -712,6 +763,15 @@ class XMLConfigEditor(QDialog):
 
     def _split_initializer_types(self, raw_types):
         return [item.strip() for item in str(raw_types or "").split(",") if item.strip()]
+
+    @staticmethod
+    def _is_uniform_initializer_steppable(steppable):
+        if steppable.tag != "Steppable":
+            return False
+        return "uniforminitializer" in {
+            str(steppable.get("Type", "")).lower(),
+            str(steppable.get("Name", "")).lower(),
+        }
 
     def _normalize_field_dialog_data(self, data):
         data = data or {}
@@ -811,13 +871,6 @@ class XMLConfigEditor(QDialog):
             except Exception:
                 continue
         return sorted(set(used))
-
-    def _backup_xml(self):
-        if not self.xml_path.exists():
-            return
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = self.xml_path.with_name(f"{self.xml_path.name}.bak_{stamp}")
-        shutil.copy2(self.xml_path, backup_path)
 
     def _reload_structure_manager_tree(self):
         self.structure_manager.tree = ET.parse(str(self.xml_path))
