@@ -6,13 +6,13 @@ import sys
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QListWidget, QPushButton, QDialog,
-    QInputDialog, QApplication, QMessageBox, QFileDialog, QTextEdit
+    QWidget, QVBoxLayout, QListWidget, QPushButton,
+    QInputDialog, QApplication, QMessageBox, QFileDialog
 )
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.core.rule_schema import case_payload
-from cc3d_builder.core.state_key_catalog import format_state_key_catalog
 from cc3d_builder.core.csv_importer import import_rules_from_csv
+from cc3d_builder.gui.state_key_reference_dialog import show_state_key_reference_dialog
 from cc3d_builder.utils_extensions.utils import  handle_new_rule_registration, ask_params_gui, process_custom_script, extract_params
 from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
 from cc3d_builder.utils_extensions.paths import ROOT, SANDBOX_DIR
@@ -81,22 +81,7 @@ class MainWindow(QWidget):
             self.refresh_list()
 
     def show_state_key_reference(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("State Key Reference")
-        dialog.resize(780, 620)
-
-        text = QTextEdit(dialog)
-        text.setReadOnly(True)
-        text.setPlainText(format_state_key_catalog())
-
-        close_btn = QPushButton("Close", dialog)
-        close_btn.clicked.connect(dialog.accept)
-
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(text)
-        layout.addWidget(close_btn)
-
-        dialog.exec_()
+        show_state_key_reference_dialog(self)
 
     def set_execution_semantics(self):
         if not self.registry:

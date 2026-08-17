@@ -519,6 +519,12 @@ The state key catalog can be printed from CLI:
 python3 -m cc3d_builder.cli.main --state-keys
 ```
 
+In an interactive terminal, this opens a paginated reference. To print the full catalog at once, run:
+
+```bash
+python3 -m cc3d_builder.cli.main --state-keys --all
+```
+
 ## 10. Behavior Coverage
 
 | behaviour | executor | main capability |
@@ -1048,6 +1054,7 @@ RuleParser supports intracellular regulatory models through SBML, Antimony, Cell
 python3 -m cc3d_builder.gui.project_loader
 python3 -m cc3d_builder.cli.main
 python3 -m cc3d_builder.cli.main --state-keys
+python3 -m cc3d_builder.cli.main --state-keys --all
 ```
 
 ### Main Runtime Files

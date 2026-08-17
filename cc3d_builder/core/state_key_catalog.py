@@ -273,50 +273,89 @@ def iter_dynamic_numeric_inputs():
         yield section["category"], section.get("source", ""), section["items"]
 
 
-def format_state_key_catalog():
-    lines = [
-        "Available state keys for rule expressions / dynamic numeric inputs",
-        "",
-        "Use these names directly as state_key values or inside expressions.",
-        "The displayed key is the expression variable; the source tells where it is read from.",
-        "Nested behaviour_stats values are flattened with underscores by RuleEngine.",
-        "Field placeholders use the actual field name, e.g. <FIELD> -> Oxygen.",
-        "",
+def _format_item(lines, item):
+    if len(item) == 3:
+        key, source_expr, description = item
+    else:
+        key, description = item
+        source_expr = ""
+    lines.append(f"  {key}")
+    if source_expr:
+        lines.append(f"    Source path: {source_expr}")
+    lines.append(f"    {description}")
+    lines.append("")
+
+
+def state_key_catalog_pages():
+    pages = [
+        {
+            "title": "Overview",
+            "lines": [
+                "Available state keys for rule expressions / dynamic numeric inputs",
+                "",
+                "Use these names directly as state_key values or inside expressions.",
+                "",
+                "The displayed key is the expression variable; the source tells where it is read from.",
+                "",
+                "Catalog entries are system-defined callable names, not values guaranteed to exist on every cell at simulation start.",
+                "",
+                "Native cell attributes such as volume usually exist immediately; behaviour stats and custom state keys appear only after runtime code writes them.",
+                "",
+                "To load a custom state key into the current simulation, write it into cell state, for example:",
+                "",
+                "  state = engine.ensure_cell_state(cell)",
+                "  state['oxygen_signal'] = 0.8",
+                "",
+                "After that, rule expressions can read it as {state_oxygen_signal} or, depending on resolver context, oxygen_signal/state_oxygen_signal.",
+                "",
+                "Nested behaviour_stats values are flattened with underscores by RuleEngine.",
+                "",
+                "Field placeholders use the actual field name, e.g. <FIELD> -> Oxygen.",
+            ],
+        }
     ]
 
     for category, source, items in iter_state_key_catalog():
-        lines.append(category)
+        lines = [category]
         if source:
             lines.append(f"  Source: {source}")
-        for item in items:
-            if len(item) == 3:
-                key, source_expr, description = item
-            else:
-                key, description = item
-                source_expr = ""
-            lines.append(f"  {key}")
-            if source_expr:
-                lines.append(f"    Source path: {source_expr}")
-            lines.append(f"    {description}")
         lines.append("")
+        for item in items:
+            _format_item(lines, item)
+        pages.append({"title": category, "lines": lines})
 
-    lines.extend(
-        [
-            "Dynamic numeric inputs",
-            "  Use the state keys above inside {key} expressions where dynamic numeric fields are supported.",
-            "  Physical-model JSON regulators are chemical fields sampled by the rule engine.",
-            "  CSV cells containing JSON must escape quotes using doubled quotes.",
-            "",
-        ]
-    )
+    dynamic_overview = [
+        "Dynamic numeric inputs",
+        "  Use the state keys above inside {key} expressions where dynamic numeric fields are supported.",
+        "  Physical-model JSON regulators are chemical fields sampled by the rule engine.",
+        "  CSV cells containing JSON must escape quotes using doubled quotes.",
+    ]
+    pages.append({"title": "Dynamic numeric inputs", "lines": dynamic_overview})
 
     for category, source, items in iter_dynamic_numeric_inputs():
-        lines.append(category)
+        lines = [category]
         if source:
             lines.append(f"  Source: {source}")
-        for key, description in items:
-            lines.append(f"  {key}")
-            lines.append(f"    {description}")
         lines.append("")
+        for item in items:
+            _format_item(lines, item)
+        pages.append({"title": category, "lines": lines})
 
-    return "\n".join(lines).rstrip()
+    return pages
+
+
+def format_state_key_catalog_page(page_index=0):
+    pages = state_key_catalog_pages()
+    if not pages:
+        return ""
+    page_index = max(0, min(int(page_index), len(pages) - 1))
+    page = pages[page_index]
+    header = f"State Key Reference - Page {page_index + 1}/{len(pages)}: {page['title']}"
+    return "\n".join([header, "=" * len(header), "", *page["lines"]]).rstrip()
+
+
+def format_state_key_catalog():
+    return "\n\n".join(
+        format_state_key_catalog_page(page_index)
+        for page_index, _page in enumerate(state_key_catalog_pages())
+    ).rstrip()

@@ -42,6 +42,8 @@ View state-key reference:
 python3 -m cc3d_builder.cli.main --state-keys
 ```
 
+This opens a paginated reference in an interactive terminal. Use `--state-keys --all` to print the full catalog at once.
+
 Import rules from CSV:
 
 ```bash

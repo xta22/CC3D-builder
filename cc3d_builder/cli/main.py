@@ -1,7 +1,11 @@
 # cli/main.py
 import sys
 from pathlib import Path
-from cc3d_builder.core.state_key_catalog import format_state_key_catalog
+from cc3d_builder.core.state_key_catalog import (
+    format_state_key_catalog,
+    format_state_key_catalog_page,
+    state_key_catalog_pages,
+)
 
 
 def _format_names(names):
@@ -54,11 +58,53 @@ def _choose_cli_action():
     return input("Choice [1]: ").strip() or "1"
 
 
+def _browse_state_key_catalog():
+    pages = state_key_catalog_pages()
+    page_index = 0
+
+    while True:
+        print()
+        print(format_state_key_catalog_page(page_index))
+        print()
+        command = input("[Enter/n] next, [p] previous, [page number] jump, [a] all, [q] quit: ").strip().lower()
+
+        if command in {"q", "quit", "exit"}:
+            return
+        if command in {"a", "all"}:
+            print()
+            print(format_state_key_catalog())
+            return
+        if command in {"", "n", "next"}:
+            if page_index < len(pages) - 1:
+                page_index += 1
+            else:
+                print("Already at the last page.")
+            continue
+        if command in {"p", "prev", "previous"}:
+            if page_index > 0:
+                page_index -= 1
+            else:
+                print("Already at the first page.")
+            continue
+        if command.isdigit():
+            requested = int(command)
+            if 1 <= requested <= len(pages):
+                page_index = requested - 1
+            else:
+                print(f"Page must be between 1 and {len(pages)}.")
+            continue
+
+        print("Unknown command.")
+
+
 def main():
     args = sys.argv[1:]
 
     if args and args[0] in {"--state-keys", "state-keys", "--list-state-keys"}:
-        print(format_state_key_catalog())
+        if "--all" in args[1:] or not sys.stdin.isatty():
+            print(format_state_key_catalog())
+        else:
+            _browse_state_key_catalog()
         return
 
     execution_semantics = None

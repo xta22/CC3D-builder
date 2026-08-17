@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QMessageBox, QHeaderView, QAbstractItemView, QPushButton, QInputDialog,
     QGroupBox, QFormLayout, QScrollArea, QDialog, QLineEdit,
-    QDialogButtonBox, QScrollArea, QFileDialog, QTextEdit, QApplication,
+    QDialogButtonBox, QScrollArea, QFileDialog, QApplication,
     QSizePolicy, QLabel
 )
 from PyQt5.QtCore import Qt
@@ -13,9 +13,9 @@ from pathlib import Path
 from cc3d_builder.gui.main_editor import MainWindow
 from cc3d_builder.core.rule_builder import build_rule
 from cc3d_builder.core.rule_schema import case_payload
-from cc3d_builder.core.state_key_catalog import format_state_key_catalog
 from cc3d_builder.gui.build_model_gui import build_model_gui
 from cc3d_builder.gui.field_setup_dialog import FieldSetupDialog
+from cc3d_builder.gui.state_key_reference_dialog import show_state_key_reference_dialog
 from cc3d_builder.utils_extensions.rule_parsing import extract_celltypes_from_rule, extract_fields_from_rule
 import importlib.util
 from cc3d_builder.utils_extensions.utils import collect_custom_params_gui, process_custom_script, extract_params
@@ -240,22 +240,7 @@ class ManageRulesWindow(QWidget):
         self.main_layout.addLayout(toolbar_layout) # type: ignore
 
     def show_state_key_reference(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("State Key Reference")
-        dialog.resize(780, 620)
-
-        text = QTextEdit(dialog)
-        text.setReadOnly(True)
-        text.setPlainText(format_state_key_catalog())
-
-        close_btn = QPushButton("Close", dialog)
-        close_btn.clicked.connect(dialog.accept)
-
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(text)
-        layout.addWidget(close_btn)
-
-        dialog.exec_()
+        show_state_key_reference_dialog(self)
 
     def setup_table_config(self):
         self.columns = ["ID", "Behaviour", "Target Cell", "Frequency", "Condition", "Apply Params", "Once", "Custom Script"]
