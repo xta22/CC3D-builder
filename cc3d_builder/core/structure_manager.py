@@ -1410,6 +1410,87 @@ class StructureManager:
         types = ET.SubElement(region, "Types")
         types.text = str(raw_types).strip()
 
+    def update_pif_io(self, pif_config):
+        """
+        Synchronize optional CC3D PIF import steppable.
+
+        Expected settings shape:
+        {
+            "initializer": {"enabled": true, "path": "Simulation/init.piff"},
+            "dumper": {"enabled": true, "path": "Simulation/snapshot", "frequency": 100}
+        }
+
+        Export is handled by RuleParserPIFDumperSteppable rather than native
+        PIFDumper so that compartment/cluster projects preserve clusterId.
+        """
+        config = self._normalize_pif_io_config(pif_config)
+        initializer = config.get("initializer", {})
+        removable = {"PIFInitializer", "PIFDumper"}
+        if initializer.get("enabled") and initializer.get("path"):
+            removable.add("UniformInitializer")
+        self._remove_steppables_by_type(removable)
+
+        if initializer.get("enabled") and initializer.get("path"):
+            steppable = ET.SubElement(self.root, "Steppable", {"Type": "PIFInitializer"})
+            pif_name = ET.SubElement(steppable, "PIFName")
+            pif_name.text = str(initializer["path"]).strip()
+
+        self._indent(self.root)
+        return True
+
+    def _remove_steppables_by_type(self, type_names):
+        normalized = {str(name).lower() for name in type_names}
+        for parent in self.root.iter():
+            for child in list(parent):
+                if child.tag != "Steppable":
+                    continue
+                steppable_type = str(child.get("Type", child.get("Name", ""))).lower()
+                if steppable_type in normalized:
+                    parent.remove(child)
+
+    @staticmethod
+    def _normalize_pif_io_config(pif_config):
+        if not isinstance(pif_config, dict):
+            pif_config = {}
+
+        raw_initializer = pif_config.get("initializer") or pif_config.get("import") or {}
+        raw_dumper = pif_config.get("dumper") or pif_config.get("export") or {}
+        if not isinstance(raw_initializer, dict):
+            raw_initializer = {}
+        if not isinstance(raw_dumper, dict):
+            raw_dumper = {}
+
+        initializer_path = (
+            raw_initializer.get("path")
+            or raw_initializer.get("pif_name")
+            or raw_initializer.get("PIFName")
+            or ""
+        )
+        dumper_path = (
+            raw_dumper.get("path")
+            or raw_dumper.get("base_name")
+            or raw_dumper.get("pif_name")
+            or raw_dumper.get("PIFName")
+            or ""
+        )
+
+        try:
+            frequency = int(float(raw_dumper.get("frequency", raw_dumper.get("Frequency", 100))))
+        except (TypeError, ValueError):
+            frequency = 100
+
+        return {
+            "initializer": {
+                "enabled": bool(raw_initializer.get("enabled", raw_initializer.get("use", False))),
+                "path": str(initializer_path).strip(),
+            },
+            "dumper": {
+                "enabled": bool(raw_dumper.get("enabled", raw_dumper.get("use", False))),
+                "path": str(dumper_path).strip(),
+                "frequency": max(1, frequency),
+            },
+        }
+
     def get_xml_cell_types(self):
         """extract all TypeName from CellType Plugin in XML"""
         plugin = self.root.find(".//Plugin[@Name='CellType']")

@@ -121,8 +121,13 @@ class {class_name}({base_class}):
         self._death_status_field_ready = False
         self._intracellular_initialized = False
         self._attached_intracellular_cell_models = set()
+        self._unavailable_intracellular_model_specs = set()
+        self._warned_intracellular_model_issues = set()
         self._intracellular_global_step_marks = set()
         self._subcellular_visualization_fields = {{}}
+        self._pif_dumper_enabled = False
+        self._pif_dumper_base_name = ""
+        self._pif_dumper_frequency = 100
         self.audit_output_dir = Path("simulation_time_series")
         self._audit_buffer = []
         self._audit_exported = False
@@ -271,6 +276,7 @@ class {class_name}({base_class}):
 GENERATED_HELPERS = r'''
     def start(self):
         self._ensure_death_status_field()
+        self._configure_pif_dumper()
         self._initialize_intracellular_models()
         self._configure_audit_output_dir()
         self._apply_initial_celltype_constraints()
@@ -305,6 +311,7 @@ GENERATED_HELPERS = r'''
         self._update_subcellular_visualization_fields(mcs)
         if self._audit_interval_matches(mcs):
             self._audit_all_cells(mcs)
+        self._dump_pif_snapshot_if_needed(mcs)
 
     def finish(self):
         self._export_audit_data()
@@ -318,6 +325,76 @@ GENERATED_HELPERS = r'''
         except Exception:
             interval = 50
         return interval > 0 and mcs > 0 and mcs % interval == 0
+
+    def _configure_pif_dumper(self):
+        config = self.settings.get("piff") or self.settings.get("pif") or self.settings.get("pif_io") or {}
+        dumper = config.get("dumper") or config.get("export") or {}
+        if not isinstance(dumper, dict):
+            dumper = {}
+        try:
+            frequency = int(float(dumper.get("frequency", dumper.get("Frequency", 100))))
+        except (TypeError, ValueError):
+            frequency = 100
+        base_name = str(
+            dumper.get("path")
+            or dumper.get("base_name")
+            or dumper.get("pif_name")
+            or dumper.get("PIFName")
+            or ""
+        ).strip()
+        self._pif_dumper_enabled = bool(dumper.get("enabled", dumper.get("use", False)) and base_name)
+        self._pif_dumper_base_name = base_name
+        self._pif_dumper_frequency = max(1, frequency)
+        if self._pif_dumper_enabled:
+            print(
+                "[GeneratedPIFDumper] enabled: "
+                f"base={self._pif_dumper_base_name} frequency={self._pif_dumper_frequency} include_clusters=True"
+            )
+
+    def _dump_pif_snapshot_if_needed(self, mcs):
+        if not self._pif_dumper_enabled:
+            return
+        if mcs <= 0 or mcs % self._pif_dumper_frequency != 0:
+            return
+        path = self._pif_snapshot_path(mcs)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line_count = 0
+        with path.open("w", encoding="utf-8") as handle:
+            handle.write("Include Clusters\n")
+            for x in range(self.dim.x):
+                for y in range(self.dim.y):
+                    for z in range(self.dim.z):
+                        cell = self.cell_field[x, y, z]
+                        if cell is None:
+                            continue
+                        cluster_id = getattr(cell, "clusterId", getattr(cell, "id", 0))
+                        cell_id = getattr(cell, "id", 0)
+                        type_name = self.get_cell_type_name(cell) or str(getattr(cell, "type", "Cell"))
+                        handle.write(
+                            f"{int(cluster_id)}\t{int(cell_id)}\t{type_name}\t"
+                            f"{x}\t{x}\t{y}\t{y}\t{z}\t{z}\n"
+                        )
+                        line_count += 1
+        print(f"[GeneratedPIFDumper] wrote {line_count} occupied pixels to {path}")
+
+    def _pif_snapshot_path(self, mcs):
+        base = Path(self._pif_dumper_base_name).expanduser()
+        extension = base.suffix if base.suffix.lower() in {".pif", ".piff"} else ".piff"
+        if base.suffix.lower() in {".pif", ".piff"}:
+            base = base.with_suffix("")
+        path = base.parent / f"{base.name}{int(mcs):06d}{extension}"
+        if path.is_absolute():
+            return path
+        return self._project_root_for_outputs() / path
+
+    def _project_root_for_outputs(self):
+        try:
+            base_path = Path(self.simulator.getBasePath()).expanduser().resolve()
+        except Exception:
+            return Path.cwd()
+        if base_path.name == "Simulation":
+            return base_path.parent
+        return base_path
 
     def _audit_cell_sequence_limit(self):
         raw_limit = self.settings.get("audit_cell_sequence_limit", 3)
@@ -1925,6 +2002,9 @@ GENERATED_HELPERS = r'''
         alias = self._intracellular_alias(spec)
         if not alias:
             return False
+        source_key = self._intracellular_model_source_key(spec)
+        if source_key in self._unavailable_intracellular_model_specs:
+            return False
         key = (getattr(cell, "id", None), alias)
         if key in self._attached_intracellular_cell_models and self._live_intracellular_model(cell, alias) is not None:
             return True
@@ -1994,13 +2074,59 @@ GENERATED_HELPERS = r'''
                 kwargs["model_string"] = source.get("text") or spec.get("model_string") or spec.get("source_text") or ""
             else:
                 kwargs["model_file"] = self._resolve_model_path(source.get("path") or spec.get("path") or spec.get("model_file"))
+        if not self._validate_intracellular_attach_sources(kwargs, spec):
+            return False
         kwargs = {key: value for key, value in kwargs.items() if value not in (None, "")}
+        source_key = self._intracellular_model_source_key(spec)
+        if source_key in self._unavailable_intracellular_model_specs:
+            return False
         try:
             method(**self._supported_intracellular_kwargs(method, kwargs))
             return True
         except Exception as exc:
-            print(f"[GeneratedIntracellular] failed to attach {self._intracellular_alias(spec)}: {exc}")
+            self._unavailable_intracellular_model_specs.add(source_key)
+            self._warn_intracellular_once(
+                ("attach_failed", source_key),
+                f"[GeneratedIntracellular] failed to attach {self._intracellular_alias(spec)}; skipping further attempts: {exc}",
+            )
             return False
+
+    def _validate_intracellular_attach_sources(self, kwargs, spec):
+        source_key = self._intracellular_model_source_key(spec)
+        missing = []
+        for key in ("model_file", "bnd_file", "cfg_file"):
+            raw_path = kwargs.get(key)
+            if not raw_path:
+                continue
+            path = Path(str(raw_path)).expanduser()
+            if not path.exists():
+                missing.append(str(path))
+        if not missing:
+            return True
+        self._unavailable_intracellular_model_specs.add(source_key)
+        self._warn_intracellular_once(
+            ("missing_source", source_key),
+            f"[GeneratedIntracellular] source file not found for {self._intracellular_alias(spec)}; skipping model attach: {', '.join(missing)}",
+        )
+        return False
+
+    def _intracellular_model_source_key(self, spec):
+        source = spec.get("source", {}) if isinstance(spec.get("source"), dict) else {}
+        source_kind = str(source.get("kind") or spec.get("source_kind") or "file").strip().lower()
+        return (
+            self._intracellular_alias(spec),
+            str(spec.get("engine", "sbml")).strip().lower(),
+            source_kind,
+            str(source.get("path") or spec.get("path") or spec.get("model_file") or ""),
+            str(source.get("boolean_network_path") or spec.get("boolean_network_path") or spec.get("bnd_file") or ""),
+            str(source.get("simulation_configuration_path") or spec.get("configuration_path") or spec.get("cfg_file") or ""),
+        )
+
+    def _warn_intracellular_once(self, key, message):
+        if key in self._warned_intracellular_model_issues:
+            return
+        self._warned_intracellular_model_issues.add(key)
+        print(message)
 
     def _resolve_model_path(self, raw_path):
         if not raw_path:

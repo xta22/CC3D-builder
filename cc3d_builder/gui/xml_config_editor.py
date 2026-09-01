@@ -9,12 +9,17 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -41,7 +46,9 @@ class XMLConfigEditor(QDialog):
         self.celltype_params = copy.deepcopy(getattr(self.registry, "celltype_params", {}) or {})
         self.field_params = copy.deepcopy(getattr(self.registry, "field_params", {}) or {})
         self.initializer_regions = self._read_initializer_regions_from_xml()
+        self.pif_config = self._read_pif_config()
         self._updating_initializer_table = False
+        self._updating_initializer_mode = False
         self._deleted_celltypes = set()
         self._deleted_fields = set()
 
@@ -160,6 +167,45 @@ class XMLConfigEditor(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
+        pif_group = QGroupBox("PIF / PIFF Import and Export")
+        pif_layout = QVBoxLayout(pif_group)
+        pif_note = QLabel(
+            "PIF import uses CC3D PIFInitializer. Export uses RuleParser's "
+            "cluster-aware PIFF dumper, so compartment cluster ids are preserved."
+        )
+        pif_note.setWordWrap(True)
+        pif_layout.addWidget(pif_note)
+
+        self.pif_import_enabled = QCheckBox("Import initial lattice from PIF")
+        self.pif_import_enabled.toggled.connect(self._on_pif_import_toggled)
+        pif_layout.addWidget(self.pif_import_enabled)
+        import_row = QHBoxLayout()
+        self.pif_import_path = QLineEdit()
+        self.pif_import_path.setPlaceholderText("Simulation/init.piff")
+        import_browse_btn = QPushButton("Browse")
+        import_browse_btn.clicked.connect(self._browse_pif_initializer)
+        import_row.addWidget(self.pif_import_path)
+        import_row.addWidget(import_browse_btn)
+        pif_layout.addLayout(import_row)
+
+        self.pif_dumper_enabled = QCheckBox("Export lattice snapshots to PIF")
+        pif_layout.addWidget(self.pif_dumper_enabled)
+        export_form = QFormLayout()
+        export_row = QHBoxLayout()
+        self.pif_dumper_path = QLineEdit()
+        self.pif_dumper_path.setPlaceholderText("Simulation/snapshot")
+        export_browse_btn = QPushButton("Browse")
+        export_browse_btn.clicked.connect(self._browse_pif_dumper)
+        export_row.addWidget(self.pif_dumper_path)
+        export_row.addWidget(export_browse_btn)
+        self.pif_dumper_frequency = QSpinBox()
+        self.pif_dumper_frequency.setRange(1, 1000000000)
+        self.pif_dumper_frequency.setValue(100)
+        export_form.addRow("Export base name:", export_row)
+        export_form.addRow("Frequency:", self.pif_dumper_frequency)
+        pif_layout.addLayout(export_form)
+        layout.addWidget(pif_group)
+
         button_row = QHBoxLayout()
         add_btn = QPushButton("Add Region")
         delete_btn = QPushButton("Delete Selected")
@@ -190,6 +236,7 @@ class XMLConfigEditor(QDialog):
         self._populate_contact_table()
         self._populate_field_table()
         self._populate_initializer_table()
+        self._populate_pif_controls()
 
     def reload_from_disk(self):
         if self.registry:
@@ -199,6 +246,7 @@ class XMLConfigEditor(QDialog):
         self.celltype_params = copy.deepcopy(getattr(self.registry, "celltype_params", {}) or {})
         self.field_params = copy.deepcopy(getattr(self.registry, "field_params", {}) or {})
         self.initializer_regions = self._read_initializer_regions_from_xml()
+        self.pif_config = self._read_pif_config()
         self._deleted_celltypes.clear()
         self._deleted_fields.clear()
         self.reload_from_memory()
@@ -264,6 +312,7 @@ class XMLConfigEditor(QDialog):
         use_box = QCheckBox()
         use_box.setChecked(bool(region.get("enabled", True)))
         use_box.setStyleSheet("margin-left: 14px;")
+        use_box.toggled.connect(self._on_initializer_use_toggled)
         self.initializer_table.setCellWidget(row, 0, use_box)
 
         self.initializer_table.setItem(row, 1, QTableWidgetItem(str(region.get("types", ""))))
@@ -407,6 +456,7 @@ class XMLConfigEditor(QDialog):
         self.reload_from_memory()
 
     def add_initializer_region(self):
+        self.pif_import_enabled.setChecked(False)
         available = [name for name in self.celltype_params.keys() if str(name).lower() != "medium"]
         default_type = available[0] if available else "Cell"
         self.initializer_regions.append(self._default_initializer_region(default_type))
@@ -472,6 +522,7 @@ class XMLConfigEditor(QDialog):
 
         try:
             self._collect_initializer_table_into_local()
+            self._collect_pif_controls_into_local()
             self._collect_cell_table_into_local()
             self._collect_field_table_into_local()
             contact_types, contact_matrix = self._collect_contact_table()
@@ -486,6 +537,8 @@ class XMLConfigEditor(QDialog):
             self._write_contact_matrix(contact_types, contact_matrix)
             self._write_initializer_regions()
             self._sync_initializer_layout_to_registry()
+            self._write_pif_io()
+            self._sync_pif_to_registry()
             self.structure_manager.save()
             self.registry.save()
             self._xml_mtime_ns = self._current_xml_mtime_ns()
@@ -551,6 +604,221 @@ class XMLConfigEditor(QDialog):
         for row in range(self.initializer_table.rowCount()):
             updated.append(self._initializer_region_from_row(row))
         self.initializer_regions = updated
+
+    def _populate_pif_controls(self):
+        if not hasattr(self, "pif_import_enabled"):
+            return
+        config = self._normalize_pif_config(self.pif_config)
+        initializer = config["initializer"]
+        dumper = config["dumper"]
+        self.pif_import_enabled.setChecked(bool(initializer.get("enabled")))
+        self.pif_import_path.setText(str(initializer.get("path", "")))
+        self.pif_dumper_enabled.setChecked(bool(dumper.get("enabled")))
+        self.pif_dumper_path.setText(str(dumper.get("path", "")))
+        self.pif_dumper_frequency.setValue(max(1, int(dumper.get("frequency", 100))))
+        self._apply_initializer_mode_exclusivity()
+
+    def _collect_pif_controls_into_local(self):
+        initializer_path = self.pif_import_path.text().strip()
+        dumper_path = self._pif_dumper_base_name(self.pif_dumper_path.text().strip())
+        if self.pif_import_enabled.isChecked() and not initializer_path:
+            raise ValueError("PIF import path cannot be empty when PIF import is enabled.")
+        if self.pif_dumper_enabled.isChecked() and not dumper_path:
+            raise ValueError("PIF export base name cannot be empty when PIF export is enabled.")
+        self.pif_config = {
+            "initializer": {
+                "enabled": bool(self.pif_import_enabled.isChecked()),
+                "path": initializer_path,
+            },
+            "dumper": {
+                "enabled": bool(self.pif_dumper_enabled.isChecked()),
+                "path": dumper_path,
+                "frequency": int(self.pif_dumper_frequency.value()),
+            },
+        }
+        if self.pif_config["initializer"]["enabled"]:
+            for region in self.initializer_regions:
+                region["enabled"] = False
+
+    def _write_pif_io(self):
+        if hasattr(self.structure_manager, "update_pif_io"):
+            self.structure_manager.update_pif_io(self.pif_config)
+
+    def _sync_pif_to_registry(self):
+        settings = self.registry.settings if isinstance(self.registry.settings, dict) else {}
+        self.registry.settings = settings
+        settings["piff"] = copy.deepcopy(self._normalize_pif_config(self.pif_config))
+
+    def _on_pif_import_toggled(self, checked):
+        if self._updating_initializer_mode or self._updating_initializer_table:
+            return
+        if checked:
+            self._updating_initializer_mode = True
+            try:
+                for row in range(self.initializer_table.rowCount()):
+                    widget = self.initializer_table.cellWidget(row, 0)
+                    if isinstance(widget, QCheckBox):
+                        widget.setChecked(False)
+            finally:
+                self._updating_initializer_mode = False
+        self._apply_initializer_mode_exclusivity()
+
+    def _on_initializer_use_toggled(self, checked):
+        if self._updating_initializer_mode or self._updating_initializer_table:
+            return
+        if checked and self.pif_import_enabled.isChecked():
+            self._updating_initializer_mode = True
+            try:
+                self.pif_import_enabled.setChecked(False)
+            finally:
+                self._updating_initializer_mode = False
+        self._apply_initializer_mode_exclusivity()
+
+    def _apply_initializer_mode_exclusivity(self):
+        if not hasattr(self, "initializer_table") or not hasattr(self, "pif_import_enabled"):
+            return
+        pif_import_enabled = bool(self.pif_import_enabled.isChecked())
+        self.initializer_table.setEnabled(not pif_import_enabled)
+
+    def _read_pif_config(self):
+        config = self._settings_pif_config()
+        root = getattr(self.structure_manager, "root", None)
+        if root is None:
+            return config
+
+        initializer = self._find_steppable_by_type("PIFInitializer")
+        if initializer is not None:
+            config["initializer"] = {
+                "enabled": True,
+                "path": self._child_text(initializer, "PIFName", ""),
+            }
+
+        dumper = self._find_steppable_by_type("PIFDumper")
+        if dumper is not None and not config.get("dumper", {}).get("enabled"):
+            config["dumper"] = {
+                "enabled": True,
+                "path": self._child_text(dumper, "PIFName", ""),
+                "frequency": self._xml_int_attr(dumper, "Frequency", 100),
+            }
+
+        return self._normalize_pif_config(config)
+
+    def _settings_pif_config(self):
+        settings = getattr(self.registry, "settings", {}) or {}
+        if not isinstance(settings, dict):
+            return self._default_pif_config()
+        raw = settings.get("piff") or settings.get("pif") or settings.get("pif_io")
+        return self._normalize_pif_config(raw)
+
+    @staticmethod
+    def _default_pif_config():
+        return {
+            "initializer": {"enabled": False, "path": ""},
+            "dumper": {"enabled": False, "path": "", "frequency": 100},
+        }
+
+    def _normalize_pif_config(self, raw):
+        if not isinstance(raw, dict):
+            raw = {}
+        initializer = raw.get("initializer") or raw.get("import") or {}
+        dumper = raw.get("dumper") or raw.get("export") or {}
+        if not isinstance(initializer, dict):
+            initializer = {}
+        if not isinstance(dumper, dict):
+            dumper = {}
+
+        try:
+            frequency = int(float(dumper.get("frequency", dumper.get("Frequency", 100))))
+        except (TypeError, ValueError):
+            frequency = 100
+
+        return {
+            "initializer": {
+                "enabled": bool(initializer.get("enabled", initializer.get("use", False))),
+                "path": str(
+                    initializer.get("path")
+                    or initializer.get("pif_name")
+                    or initializer.get("PIFName")
+                    or ""
+                ).strip(),
+            },
+            "dumper": {
+                "enabled": bool(dumper.get("enabled", dumper.get("use", False))),
+                "path": str(
+                    dumper.get("path")
+                    or dumper.get("base_name")
+                    or dumper.get("pif_name")
+                    or dumper.get("PIFName")
+                    or ""
+                ).strip(),
+                "frequency": max(1, frequency),
+            },
+        }
+
+    def _find_steppable_by_type(self, type_name):
+        wanted = str(type_name).strip().lower()
+        root = getattr(self.structure_manager, "root", None)
+        if root is None:
+            return None
+        for steppable in root.findall(".//Steppable"):
+            current = str(steppable.get("Type", steppable.get("Name", ""))).strip().lower()
+            if current == wanted:
+                return steppable
+        return None
+
+    def _browse_pif_initializer(self):
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select PIF / PIFF Initializer",
+            self._dialog_start_path(self.pif_import_path.text()),
+            "PIF files (*.pif *.piff);;All files (*)",
+        )
+        if filename:
+            self.pif_import_path.setText(self._project_relative_or_absolute(filename))
+
+    def _browse_pif_dumper(self):
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Select PIF Export Base Name",
+            self._dialog_start_path(self.pif_dumper_path.text() or "Simulation/snapshot"),
+            "PIF files (*.pif *.piff);;All files (*)",
+        )
+        if filename:
+            self.pif_dumper_path.setText(
+                self._pif_dumper_base_name(self._project_relative_or_absolute(filename))
+            )
+
+    def _dialog_start_path(self, text):
+        text = str(text or "").strip()
+        if text:
+            path = Path(text).expanduser()
+            if not path.is_absolute():
+                path = self._project_root() / path
+            return str(path)
+        return str(self._project_root() / "Simulation")
+
+    def _project_root(self):
+        return Path(getattr(self.structure_manager, "project_path", self.xml_path.parent.parent)).expanduser().resolve()
+
+    def _project_relative_or_absolute(self, filename):
+        path = Path(filename).expanduser()
+        try:
+            resolved = path.resolve()
+            project_root = self._project_root()
+            return str(resolved.relative_to(project_root))
+        except ValueError:
+            return str(path.resolve())
+        except OSError:
+            return str(path)
+
+    @staticmethod
+    def _pif_dumper_base_name(path_text):
+        path_text = str(path_text or "").strip()
+        lower = path_text.lower()
+        for suffix in (".piff", ".pif"):
+            if lower.endswith(suffix):
+                return path_text[:-len(suffix)]
+        return path_text
 
     def _initializer_region_from_row(self, row):
         use_widget = self.initializer_table.cellWidget(row, 0)
@@ -673,6 +941,8 @@ class XMLConfigEditor(QDialog):
         }
 
     def _initializer_regions_for_registry(self):
+        if self._pif_import_enabled():
+            return []
         regions = []
         for region in self.initializer_regions:
             if not region.get("enabled", True):
@@ -720,6 +990,12 @@ class XMLConfigEditor(QDialog):
                     "width": max(1, self._xml_int_text(region, "Width", 10)),
                 })
         return regions
+
+    def _pif_import_enabled(self):
+        if hasattr(self, "pif_import_enabled"):
+            return bool(self.pif_import_enabled.isChecked())
+        config = self._normalize_pif_config(getattr(self, "pif_config", {}))
+        return bool(config.get("initializer", {}).get("enabled"))
 
     def _estimate_initializer_cells(self, region):
         count = self._estimate_initializer_cell_count(region)

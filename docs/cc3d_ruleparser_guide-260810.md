@@ -252,8 +252,19 @@ Use the XML Config Editor to manage:
 - field diffusion/decay
 - chemotaxis placeholders
 - initializer regions
+- PIF/PIFF import and export settings
 
 The XML editor writes back to the sandbox XML. Registry save then keeps rule JSON and XML dependencies aligned.
+
+In the Initializer tab, users can choose between XML `UniformInitializer` regions and PIF/PIFF import for the initial lattice. These two initialization modes are mutually exclusive: enabling PIF/PIFF import removes the XML uniform initializer regions from the saved XML. PIF/PIFF export can be enabled separately to save lattice snapshots during simulation.
+
+Runtime PIF/PIFF exports are written by the running CC3D project copy. In the normal RuleParser run workflow, CompuCell3D creates a timestamped runtime project under the RuleParser repository, for example:
+
+```text
+Rules_project_cc3d_<timestamp>/Simulation/
+```
+
+Exported PIFF files are saved in that runtime `Simulation/` directory. They are not synchronized back to the source CC3D project, and timestamped runtime project folders prevent exports from different runs from overwriting each other.
 
 ### 6.4 Register Project-Level Models
 
@@ -785,6 +796,15 @@ Manages XML-level structures:
 - diffusion/decay
 - chemotaxis settings
 - initializer regions
+- PIF/PIFF import and export settings
+
+The Initializer tab supports two initial lattice sources: XML `UniformInitializer` regions or a PIF/PIFF file imported through CC3D `PIFInitializer`. PIF/PIFF import and uniform initializer regions are saved as mutually exclusive options. PIF/PIFF export is an independent runtime option; when enabled, snapshots are written under the automatically generated timestamped runtime project, usually:
+
+```text
+Rules_project_cc3d_<timestamp>/Simulation/
+```
+
+These exported files stay with that runtime project copy. They are not copied back into the source project, and each run gets its own timestamped directory so PIFF outputs from separate runs do not overwrite one another.
 
 ### Intracellular Model Dialog
 

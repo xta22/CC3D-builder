@@ -327,20 +327,43 @@ def write_dynamic_wrapper(project_path, development_root=None):
         f'''print(">>> WRAPPER LOADED <<<")
 
 import sys
-import json
 import importlib
 from pathlib import Path
 
 DEVELOPMENT_ROOT = {str(development_root)!r}
-PROJECT_SIM_DIR = Path(__file__).resolve().parent
-RULES_PATH = PROJECT_SIM_DIR / "rules.json"
 
-if str(DEVELOPMENT_ROOT) not in sys.path:
-    sys.path.insert(0, str(DEVELOPMENT_ROOT))
-if str(PROJECT_SIM_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_SIM_DIR))
+def _detect_project_sim_dir(_sys=sys, _Path=Path):
+    candidates = []
+    for entry in _sys.path:
+        if entry:
+            candidates.append(_Path(entry))
+    candidates.extend([_Path.cwd(), _Path.cwd() / "Simulation"])
+    for candidate in candidates:
+        try:
+            resolved = candidate.expanduser().resolve()
+        except Exception:
+            continue
+        if (resolved / "rules.json").exists() and (
+            (resolved / "wrapper_main.py").exists()
+            or (resolved / "Rules_project_Steppables.py").exists()
+        ):
+            return resolved
+    return _Path(__file__).resolve().parent
 
-print(f"DEBUG: sys.path[0] is now: {{sys.path[0]}}")
+PROJECT_SIM_DIR = _detect_project_sim_dir()
+
+def _prepend_sys_path(path, _sys=sys):
+    text = str(path)
+    while text in _sys.path:
+        _sys.path.remove(text)
+    _sys.path.insert(0, text)
+
+_prepend_sys_path(DEVELOPMENT_ROOT)
+_prepend_sys_path(PROJECT_SIM_DIR)
+
+print(f"DEBUG: wrapper file: {{Path(__file__).resolve()}}")
+print(f"DEBUG: project sim dir: {{PROJECT_SIM_DIR}}")
+print(f"DEBUG: sys.path[:5]: {{sys.path[:5]}}")
 
 from cc3d import CompuCellSetup
 from cc3d.core.PySteppables import SteppableBasePy
@@ -364,6 +387,11 @@ from cc3d_builder.engine.steppables.force_steppable import ForceSteppable
 from cc3d_builder.engine.steppables.compartmentalize_steppable import CompartmentalizeSteppable
 from cc3d_builder.engine.steppables.fpp_link_steppable import FPPLinkSteppable
 from cc3d_builder.engine.steppables.intracellular_model_steppable import IntracellularModelSteppable
+from cc3d_builder.engine.steppables.pif_snapshot_steppable import RuleParserPIFDumperSteppable
+from cc3d_builder.engine.steppables.subcellular_steppable import SubcellularSteppable
+import cc3d_builder
+
+print(f"DEBUG: cc3d_builder loaded from: {{Path(cc3d_builder.__file__).resolve()}}")
 
 
 def _iter_project_steppable_classes(module, steppable_base=SteppableBasePy):
@@ -395,31 +423,6 @@ if not registered_original:
     print("[Wrapper] No original project steppable class found in Rules_project_Steppables.py")
 
 rule_engine = RuleEngineSteppable(frequency=1)
-try:
-    with RULES_PATH.open(encoding="utf-8") as handle:
-        rule_config = json.load(handle)
-except Exception as exc:
-    print(f"[Wrapper] Could not load rules.json for optional steppables: {{exc}}")
-    rule_config = dict()
-
-if not isinstance(rule_config, dict):
-    rule_config = dict()
-
-optional_rules = rule_config.get("rules") if isinstance(rule_config, dict) else []
-optional_subcellular_systems = rule_config.get("subcellular_systems") if isinstance(rule_config, dict) else []
-optional_settings = rule_config.get("settings") if isinstance(rule_config, dict) else {{}}
-if not isinstance(optional_rules, list):
-    optional_rules = []
-if not isinstance(optional_subcellular_systems, list):
-    optional_subcellular_systems = []
-if not isinstance(optional_settings, dict):
-    optional_settings = {{}}
-
-has_subcellular_config = bool(optional_subcellular_systems) or any(
-    isinstance(rule, dict) and str(rule.get("behaviour", "")).lower() == "subcellular"
-    for rule in optional_rules
-)
-
 CompuCellSetup.register_steppable(rule_engine)
 CompuCellSetup.register_steppable(DeathSteppable(frequency=1, engine=rule_engine))
 CompuCellSetup.register_steppable(GrowthSteppable(frequency=1, engine=rule_engine))
@@ -433,10 +436,10 @@ CompuCellSetup.register_steppable(ForceSteppable(frequency=1, engine=rule_engine
 CompuCellSetup.register_steppable(CompartmentalizeSteppable(frequency=1, engine=rule_engine))
 CompuCellSetup.register_steppable(FPPLinkSteppable(frequency=1, engine=rule_engine))
 CompuCellSetup.register_steppable(IntracellularModelSteppable(frequency=1, engine=rule_engine))
-
-if has_subcellular_config:
-    from cc3d_builder.engine.steppables.subcellular_steppable import SubcellularSteppable
-    CompuCellSetup.register_steppable(SubcellularSteppable(frequency=1, engine=rule_engine))
+CompuCellSetup.register_steppable(SubcellularSteppable(frequency=1, engine=rule_engine))
+CompuCellSetup.register_steppable(
+    RuleParserPIFDumperSteppable(frequency=1, settings_path=PROJECT_SIM_DIR / "rules.json")
+)
 
 CompuCellSetup.run()
 ''',

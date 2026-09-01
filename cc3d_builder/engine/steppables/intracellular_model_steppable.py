@@ -34,6 +34,8 @@ class IntracellularModelSteppable(SteppableBasePy):
         self.engine = engine
         self._initialized = False
         self._attached_cell_models: set[tuple[int, str]] = set()
+        self._unavailable_model_specs: set[tuple[Any, ...]] = set()
+        self._warned_model_issues: set[tuple[Any, ...]] = set()
         self._global_step_marks: set[tuple[int, str]] = set()
         self._visualization_fields: dict[str, tuple[str, str]] = {}
         if self.engine is not None:
@@ -159,6 +161,9 @@ class IntracellularModelSteppable(SteppableBasePy):
         alias = model_alias(spec)
         if not alias:
             return False
+        source_key = self._model_source_key(spec)
+        if source_key in self._unavailable_model_specs:
+            return False
         key = (int(getattr(cell, "id", -1)), alias)
         if key in self._attached_cell_models and live_model(cell, alias) is not None:
             return True
@@ -192,6 +197,9 @@ class IntracellularModelSteppable(SteppableBasePy):
             self._populate_maboss_source_kwargs(kwargs, spec, source, source_kind)
         else:
             self._populate_sbml_source_kwargs(kwargs, spec, source, source_kind)
+
+        if not self._validate_attach_sources(kwargs, spec):
+            return False
 
         return self._call_attach_method(method, kwargs, spec)
 
@@ -263,14 +271,60 @@ class IntracellularModelSteppable(SteppableBasePy):
                 return str(candidate)
         return str(path)
 
+    def _validate_attach_sources(self, kwargs, spec):
+        source_key = self._model_source_key(spec)
+        missing = []
+        for key in ("model_file", "bnd_file", "cfg_file"):
+            raw_path = kwargs.get(key)
+            if not raw_path:
+                continue
+            path = Path(str(raw_path)).expanduser()
+            if not path.exists():
+                missing.append(str(path))
+
+        if not missing:
+            return True
+
+        self._unavailable_model_specs.add(source_key)
+        self._warn_once(
+            ("missing_source", source_key),
+            f"[IntracellularModel] source file not found for {model_alias(spec)}; skipping model attach: {', '.join(missing)}",
+        )
+        return False
+
     def _call_attach_method(self, method, kwargs, spec):
         kwargs = {key: value for key, value in kwargs.items() if value not in (None, "")}
+        source_key = self._model_source_key(spec)
+        if source_key in self._unavailable_model_specs:
+            return False
         try:
             method(**self._supported_kwargs(method, kwargs))
             return True
         except Exception as exc:
-            print(f"[IntracellularModel] failed to attach {model_alias(spec)}: {exc}")
+            self._unavailable_model_specs.add(source_key)
+            self._warn_once(
+                ("attach_failed", source_key),
+                f"[IntracellularModel] failed to attach {model_alias(spec)}; skipping further attempts: {exc}",
+            )
             return False
+
+    def _model_source_key(self, spec):
+        source = spec.get("source", {}) if isinstance(spec.get("source"), dict) else {}
+        source_kind = str(source.get("kind") or spec.get("source_kind") or "file").strip().lower()
+        return (
+            model_alias(spec),
+            str(spec.get("engine", "sbml")).strip().lower(),
+            source_kind,
+            str(source.get("path") or spec.get("path") or spec.get("model_file") or ""),
+            str(source.get("boolean_network_path") or spec.get("boolean_network_path") or spec.get("bnd_file") or ""),
+            str(source.get("simulation_configuration_path") or spec.get("configuration_path") or spec.get("cfg_file") or ""),
+        )
+
+    def _warn_once(self, key, message):
+        if key in self._warned_model_issues:
+            return
+        self._warned_model_issues.add(key)
+        print(message)
 
     def _supported_kwargs(self, method, kwargs):
         try:

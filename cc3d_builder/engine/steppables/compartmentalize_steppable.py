@@ -40,7 +40,6 @@ class CompartmentalizeSteppable(SteppableBasePy):
 
     def _execute_request(self, cell, request, mcs):
         action = str(request.get("action", "extend_chain")).strip().lower()
-        print(f"[DEBUG] _execute_request: cell={cell.id if cell else None}, action={action}")
         self._maybe_report_runtime_state(cell, request, mcs)
         self._maybe_report_hypha_summary(mcs)
         if not self._reported_request_seen:
@@ -187,8 +186,6 @@ class CompartmentalizeSteppable(SteppableBasePy):
             request,
         )
         if site is None:
-            if request.get("debug"):
-                print(f"[CompartmentalizeSteppable] No usable lattice site near tip cell {tip_cell.id}")
             return
 
         parent_cluster_id = tip_cell.clusterId
@@ -369,8 +366,6 @@ class CompartmentalizeSteppable(SteppableBasePy):
             request,
         )
         if site is None:
-            if request.get("debug"):
-                print(f"[CompartmentalizeSteppable] No usable branch site near segment cell {segment_cell.id}")
             return
 
         parent_cluster_id = segment_cell.clusterId

@@ -115,6 +115,7 @@ class SimulationRegistry:
         if self.sm:
             self.sync_with_xml()
             self._apply_initial_layout_from_settings()
+            self._apply_pif_io_from_settings()
         
         self._build_index()
 
@@ -266,6 +267,10 @@ class SimulationRegistry:
             xml_updated = True
 
             if self._sync_initializers_to_xml(sm):
+                xml_updated = True
+                sm.save()
+
+            if self._sync_pif_io_to_xml(sm):
                 xml_updated = True
                 sm.save()
 
@@ -517,6 +522,31 @@ class SimulationRegistry:
             print(f"⚠️ [Registry] Could not apply profile initializer layout: {exc}")
         return False
 
+    def _sync_pif_io_to_xml(self, sm):
+        if not isinstance(self.settings, dict):
+            return False
+        pif_config = (
+            self.settings.get("piff")
+            or self.settings.get("pif")
+            or self.settings.get("pif_io")
+        )
+        if not isinstance(pif_config, dict):
+            return False
+        if not hasattr(sm, "update_pif_io"):
+            return False
+        return bool(sm.update_pif_io(pif_config))
+
+    def _apply_pif_io_from_settings(self):
+        if self.sm is None:
+            return False
+        try:
+            if self._sync_pif_io_to_xml(self.sm):
+                self.sm.save()
+                return True
+        except Exception as exc:
+            print(f"⚠️ [Registry] Could not apply PIF settings: {exc}")
+        return False
+
     @staticmethod
     def _interstitial_patch_to_region(patch):
         if not isinstance(patch, dict):
@@ -761,6 +791,8 @@ class SimulationRegistry:
             if isinstance(initial_layout, dict) and "regions" in initial_layout:
                 layout_regions = initial_layout.get("regions") or []
             sm.update_initializers(active_inits, layout_regions=layout_regions)
+
+            self._sync_pif_io_to_xml(sm)
 
             sm.save()
             print(f"✅ XML Updated: Initialized {list(active_inits.keys())}")
